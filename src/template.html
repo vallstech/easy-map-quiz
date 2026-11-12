@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Map Quiz</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--sea:#0d1720;--land:#2a3a4b;--land-hi:#38506a;--line:#0d1720;--ok:#3aa874;--bad:#e0524d;--gold:#f0b54a;--ink:#e8eef4;--mute:#8ea0b2;--panel:#152230;--edge:#25364a}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--sea);color:var(--ink);font:15px/1.4 system-ui,"Segoe UI",sans-serif;overflow:hidden}
+#map{position:absolute;inset:0;cursor:grab}#map.drag,#map.drag *{cursor:grabbing!important}
+.c[data-s=on],.hit:not([data-s=off]){cursor:pointer}svg{width:100%;height:100%;display:block}
+.c{fill:var(--land);transition:fill .3s;stroke:var(--line);stroke-width:.7;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.c[data-s=off]{fill:#1c2835}.c[data-s=on]:hover{fill:var(--land-hi)}.c[data-s=ok]{fill:var(--ok)}.c[data-s=skip]{fill:#7a4b4b}
+.c.bad,.c.hint{fill:var(--bad)!important}.c.hint{animation:p .7s infinite alternate}.c.okf{fill:var(--ok)!important}.c.okf,.c.skf,.dot.okf,.dot.skf{transition:none}.c.fo,.dot.fo{transition:fill 1s}.c.skf{fill:#a06666!important}
+@keyframes p{to{opacity:.55}}
+.dot{transition:fill .3s;fill:#9fb4c8;stroke:var(--sea);stroke-width:1;vector-effect:non-scaling-stroke;pointer-events:none}
+.dot[data-s=off]{fill:#33465a}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:#a06666}.dot.bad,.dot.hint{fill:var(--bad)}.dot.okf{fill:var(--ok)}.dot.skf{fill:#a06666}
+.hit{fill:transparent;cursor:pointer}.hit[data-s=off]{pointer-events:none}
+.bar{position:absolute;z-index:5;display:flex;gap:8px;align-items:center}
+.panel,button,select{background:var(--panel);border:1px solid var(--edge);color:var(--ink);border-radius:8px;font:inherit}
+button,select{padding:7px 12px;cursor:pointer}button:hover{border-color:var(--mute)}button:focus-visible,select:focus-visible{outline:2px solid var(--gold)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.pri{background:var(--gold);color:#1b1405;border-color:var(--gold);font-weight:600}
+#top{top:12px;left:12px;right:12px;justify-content:space-between;pointer-events:none}#top>*{pointer-events:auto}
+#task{padding:8px 18px;display:flex;gap:14px;align-items:center;min-width:220px;justify-content:center}
+#task .nm{font:600 24px Georgia,"Times New Roman",serif}.fl{height:34px;border-radius:3px;display:block}.fe{font-size:34px;line-height:1;font-family:Flags,"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif}
+/*__FONT__*/
+#score{padding:8px 14px;text-align:right;min-width:110px}#score b{font-size:22px;display:block}#score small,.mute{color:var(--mute)}
+#zoom{left:12px;bottom:12px;flex-direction:column;align-items:stretch}#zoom button{width:100%}
+#att{bottom:14px;left:50%;transform:translateX(-50%);padding:6px 14px;gap:6px}
+.pip{width:12px;height:12px;border-radius:50%;background:var(--bad)}.pip.x{background:#33465a}
+#pop{position:absolute;z-index:9;font-weight:700;pointer-events:none;transition:transform 1s,opacity 1s}
+.dock{position:absolute;z-index:15;left:50%;bottom:60px;transform:translateX(-50%);display:none;align-items:center;gap:14px;padding:10px 16px;white-space:nowrap}.dock.show{display:flex}
+/* start-screen sections: caption + divider line */
+.sec{margin-top:16px;padding-top:12px;border-top:1px solid var(--edge)}
+.sec h2{margin:0 0 2px;font:600 11px system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.sec.foot{display:flex;justify-content:space-between;align-items:center;gap:12px}
+input[type=number]{width:64px;background:var(--panel);border:1px solid var(--edge);color:var(--ink);border-radius:8px;padding:6px 8px;font:inherit}
+#pop{white-space:nowrap}
+#pop.neg{z-index:40;font-size:24px;font-weight:800;letter-spacing:.2px;padding:.14em .55em;border-radius:999px;background:#0d1720f2;border:.1em solid #ffd447;box-shadow:0 4px 18px #000c,0 0 0 2px #000;text-shadow:0 1px 2px #000;animation:negPop 2.4s ease-out forwards}
+@keyframes negPop{0%{opacity:0;transform:translate(-50%,0) scale(.6)}10%{opacity:1;transform:translate(-50%,-14px) scale(1.15)}20%{transform:translate(-50%,-18px) scale(1)}78%{opacity:1;transform:translate(-50%,-30px) scale(1)}100%{opacity:0;transform:translate(-50%,-46px) scale(1)}}
+input[type=range]{accent-color:var(--gold);width:150px}.sm{display:flex;gap:10px;align-items:center}.sm b{min-width:3ch;text-align:right}
+input[type=checkbox]{accent-color:var(--gold);width:18px;height:18px}
+.scr{position:absolute;inset:0;z-index:20;background:#0d1720ee;display:none;align-items:center;justify-content:center}
+.scr.show{display:flex}.box{padding:26px 30px;width:min(520px,92vw);max-height:92vh;overflow:auto}
+.box h1{margin:0 0 4px;font:700 30px Georgia,serif}.row{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:12px 0}
+.seg{display:flex;gap:6px;flex-wrap:wrap}.panel button.sel,.seg button.sel{background:#22384f;border-color:var(--gold)}
+table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px solid var(--edge)}td:last-child{text-align:right}
+</style></head><body>
+<div id="map"><svg id="svg"><g id="w"><g id="land"></g><g id="dots"></g></g></svg></div>
+<div class="bar" id="top">
+ <div style="display:flex;gap:8px"><button id="bMenu"></button><button id="bRestart"></button></div>
+ <div class="panel" id="task"></div>
+ <div class="panel" id="score"><small id="lSc"></small><b id="sc">0</b><small id="prog"></small></div>
+</div>
+<div class="bar" id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="zr"></button><button id="zg"></button></div>
+<div class="bar panel" id="att"></div>
+
+<div class="scr show" id="start"><div class="panel box">
+ <h1 id="tTitle"></h1><div class="mute" id="tSub"></div>
+
+ <section class="sec"><h2 id="sGame"></h2>
+  <div class="row"><span id="lReg"></span></div><div class="seg" id="regs"></div>
+  <div class="row"><span class="mute" id="subInfo"></span><button id="bSub"></button></div>
+  <div class="row"><span id="lReps"></span><input type="number" id="reps" min="1" max="10" step="1"></div>
+ </section>
+
+ <section class="sec"><h2 id="sRules"></h2>
+  <div class="row"><span id="lMode"></span><div class="seg" id="mode"></div></div>
+  <div class="row"><span id="lN"></span><div class="seg" id="num"></div></div>
+  <label class="row"><span id="lHard"></span><input type="checkbox" id="hard"></label>
+  <label class="row"><span id="lTm"></span><input type="checkbox" id="tm"></label>
+ </section>
+
+ <section class="sec"><h2 id="sShow"></h2>
+  <div class="row"><span id="lShow"></span><div class="seg" id="show"></div></div>
+  <label class="row"><span id="lSwr"></span><input type="checkbox" id="swr"></label>
+  <div class="row"><span id="lPop"></span><div class="seg" id="popSeg"></div></div>
+  <label class="row"><span id="lCam"></span><input type="checkbox" id="cam"></label>
+  <div class="row"><span id="lSm"></span><span class="sm"><input type="range" id="smooth" min="0" max="10" step="1"><b id="smV"></b></span></div>
+  <div class="row"><span id="lMap"></span><div class="seg" id="mapSeg"></div></div>
+  <div class="mute" id="mapNote" style="font-size:13px;margin:-6px 0 4px"></div>
+ </section>
+
+ <section class="sec"><h2 id="sCtl"></h2>
+  <div class="row"><span id="lRk"></span><button id="rkey"></button></div>
+ </section>
+
+ <section class="sec"><h2 id="sSite"></h2>
+  <div class="row"><span id="lLang"></span><div class="seg" id="lang"></div></div>
+ </section>
+
+ <div class="sec foot"><span class="mute" id="stat"></span><button class="pri" id="bGo"></button></div>
+</div></div>
+
+<div class="scr" id="subs"><div class="panel box"><h1 id="subT"></h1><div class="mute" id="subSub"></div><div id="subBody"></div>
+ <div class="sec foot"><button id="subClear"></button><button class="pri" id="subDone"></button></div></div></div>
+
+<div class="scr" id="pause"><div class="panel box"><h1 id="pT"></h1>
+ <div class="row"><button class="pri" id="pRes"></button><button id="pRst"></button><button id="pMenu"></button></div>
+ <div class="row"><span id="pL"></span><div class="seg" id="lang2"></div></div>
+ <div class="row"><span id="pRk"></span><button id="rkey2"></button></div>
+ <label class="row"><span id="pCam"></span><input type="checkbox" id="cam2"></label>
+ <label class="row"><span id="pLock"></span><input type="checkbox" id="lock2"></label>
+ <label class="row"><span id="pTm"></span><input type="checkbox" id="tm2"></label>
+ <div class="row"><span id="pSm"></span><span class="sm"><input type="range" id="smooth2" min="0" max="10" step="1"><b id="smV2"></b></span></div></div></div>
+
+<div class="panel dock" id="miss"><span class="mute" id="mT"></span><span id="mC" style="display:flex;gap:10px;align-items:center"></span><button class="pri" id="mCont"></button><button id="mRst"></button></div>
+
+<div class="scr" id="end"><div class="panel box"><h1 id="eT"></h1><table id="eTab"></table>
+ <div class="row"><button class="pri" id="eAgain"></button><button id="eChg"></button></div></div></div>
+
+<script>
+/* ===== Data (inserted by build.py). Country: {id:ISO2, n:fallback name, r:region, d:SVG path, c:[x,y] marker, a:bbox area deg², b:[x0,y0,x1,y1] main-landmass bbox} ===== */
+const MAPS=/*__DATA__*/{};   // {"110":[countries],"50":[countries]} — one entry per data/geojson/<key>.geojson
+let DATA=[],byId={},curMap=null;
+const FLAGS=/*__FLAGS__*/{}; // optional SVG data-URIs by ISO2; otherwise flag emoji is used
+const S_=4;                  // world units per degree (must match build.py)
+const REGS=['Europe','Asia','Africa','North America','South America','Oceania','World'];
+// Hand-picked "zoom to region" boxes [lon0,lat0,lon1,lat1] — bounding boxes of countries with far-flung territories (Russia, USA, France) would be useless.
+const VIEWS={Europe:[-25,34,45,72],Asia:[25,-11,150,55],Africa:[-20,-36,52,38],'North America':[-170,5,-50,75],'South America':[-85,-57,-32,14],Oceania:[110,-48,180,2],World:[-180,-60,180,85]};
+const T={en:{title:'Map Quiz',sub:'Find the country on the map.',reg:'Region',mode:'Attempts',per:'Per country',glob:'Global',n:'Attempts',show:'Task shows',flag:'Flag only',name:'Name only',both:'Both',map:'Map detail',mapLow:'Low',mapHigh:'High',mapNote:'A more detailed map may slow the game down and changes which countries are included.',count:'Countries in region',sGame:'What to play',tm:'Stop timer when a country is lost',tmTip:'Wrong tries while you can still continue never stop the timer.',lock:'Lock camera',restart:'Restart',sCtl:'Controls',rk:'Restart key',rkTip:'Click, then press the key you want',smooth:'Camera smoothness',off:'Off',cam:'Return camera after a correct answer',popSize:'Mistake popup size',sizeS:'Small',sizeM:'Medium',sizeL:'Large',subs:'Sub-regions',subSub:'Smaller parts of the world. They add up with the regions you picked.',subClear:'Clear',subDone:'Done','eq:N':'Africa north of the Equator','eq:S':'Africa south of the Equator','sub:Middle Africa':'Central Africa','sub:Northern America':'Northern America (US & Canada)',sRules:'Rules',sShow:'Display & hints',sSite:'Site',reps:'Repetitions (1–10)',swr:'Show name of the wrongly clicked country',hard:'Hard mode',hardTip:'Found countries are not highlighted; clicking one again costs an attempt.',lang:'Language',go:'Start',score:'Score',left:'left',menu:'Menu',res:'Resume',rst:'Restart',chg:'Change region',paused:'Paused',reset:'Reset view',zreg:'Zoom to region',itwas:'It was',cont:'Continue',done:'Finished',time:'Time',pts:'Score',err:'Mistakes',first:'Found on first try',again:'Play again',last:'Last games',Europe:'Europe',Asia:'Asia',Africa:'Africa','North America':'North America','South America':'South America',Oceania:'Oceania',World:'Whole World'},
+ru:{title:'Викторина по карте',sub:'Найдите страну на карте.',reg:'Регион',mode:'Попытки',per:'На страну',glob:'Общие',n:'Количество',show:'Задание',flag:'Только флаг',name:'Только название',both:'Флаг и название',map:'Детализация карты',mapLow:'Низкая',mapHigh:'Высокая',mapNote:'Более детальная карта может снижать производительность и меняет набор стран.',count:'Стран в регионе',sGame:'Что играем',tm:'Останавливать таймер при проигрыше страны',tmTip:'Неверные попытки, пока можно продолжать, таймер не останавливают.',lock:'Заблокировать камеру',restart:'Перезапуск',sCtl:'Управление',rk:'Клавиша перезапуска',rkTip:'Нажмите, затем нужную клавишу',smooth:'Плавность камеры',off:'Выкл',cam:'Возвращать камеру после верного ответа',popSize:'Размер подсказки при ошибке',sizeS:'Маленький',sizeM:'Средний',sizeL:'Большой',subs:'Подрегионы',subSub:'Части света поменьше. Они складываются с выбранными регионами.',subClear:'Сбросить',subDone:'Готово','eq:N':'Африка севернее экватора','eq:S':'Африка южнее экватора','sub:Northern Africa':'Северная Африка','sub:Western Africa':'Западная Африка','sub:Middle Africa':'Центральная Африка','sub:Eastern Africa':'Восточная Африка','sub:Southern Africa':'Южная Африка','sub:Northern Europe':'Северная Европа','sub:Western Europe':'Западная Европа','sub:Southern Europe':'Южная Европа','sub:Eastern Europe':'Восточная Европа','sub:Central Asia':'Центральная Азия','sub:Eastern Asia':'Восточная Азия','sub:South-Eastern Asia':'Юго-Восточная Азия','sub:Southern Asia':'Южная Азия','sub:Western Asia':'Западная Азия','sub:Northern America':'США и Канада','sub:Central America':'Центральная Америка','sub:Caribbean':'Карибы','sub:Australia and New Zealand':'Австралия и Новая Зеландия','sub:Melanesia':'Меланезия','sub:Micronesia':'Микронезия','sub:Polynesia':'Полинезия',sRules:'Правила',sShow:'Отображение и подсказки',sSite:'Сайт',reps:'Повторения (1–10)',swr:'Показывать название ошибочно выбранной страны',hard:'Сложный режим',hardTip:'Найденные страны не подсвечиваются; повторный клик по ним стоит попытки.',lang:'Язык',go:'Начать',score:'Счёт',left:'осталось',menu:'Меню',res:'Продолжить',rst:'Заново',chg:'Сменить регион',paused:'Пауза',reset:'Сбросить вид',zreg:'К региону',itwas:'Это была',cont:'Дальше',done:'Готово',time:'Время',pts:'Счёт',err:'Ошибки',first:'С первой попытки',again:'Играть снова',last:'Последние партии',Europe:'Европа',Asia:'Азия',Africa:'Африка','North America':'Северная Америка','South America':'Южная Америка',Oceania:'Океания',World:'Весь мир'}};
+const BASE=100,PEN=25,BONUS=50,BTIME=10000; // score: 100 − 25 per wrong try on this country + up to 50 speed bonus (fades to 0 over 10 s). Skipped = 0.
+const $=id=>document.getElementById(id);
+const KEY='mapquiz.v1';
+const MKEYS=Object.keys(MAPS).sort((a,b)=>b-a);   // detail levels, coarse (fast) first
+let S={lang:'en',set:{rkey:'KeyR',smooth:3,regs:['Europe'],reps:1,swr:false,mode:'per',n:3,show:'both',hard:false,map:null},game:null,recent:[]};
+try{Object.assign(S,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
+if(typeof S.set.smooth!=='number')S.set.smooth=3;
+if(typeof S.set.rkey!=='string')S.set.rkey='KeyR';
+if(!Array.isArray(S.set.regs))S.set.regs=[S.set.reg||'Europe'];   // older saves had a single region
+S.set.reps=Math.min(10,Math.max(1,Math.round(S.set.reps)||1));
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const t=k=>T[S.lang][k]||k;
+const dn={};try{['en','ru'].forEach(l=>dn[l]=new Intl.DisplayNames([l],{type:'region'}))}catch(e){}
+const nm=id=>{try{const x=dn[S.lang].of(id);if(x&&x!==id)return x}catch(e){}return byId[id].n};
+const flag=(id,h)=>FLAGS[id]?`<img class="fl" src="${FLAGS[id]}" alt="">`:`<span class="fe">${String.fromCodePoint(...[...id].map(ch=>127397+ch.charCodeAt(0)))}</span>`;
+// A region token is: a continent name, 'World', 'sub:<UN sub-region>' (from the GeoJSON SUBREGION field) or 'eq:N' / 'eq:S' (Africa north / south of the equator, by the centre of the country's main landmass). A country is in play if ANY selected token matches.
+const inRegMap=(c,regs)=>regs.some(r=>r==='World'||r===c.r||(r.startsWith('sub:')&&c.s===r.slice(4))||(c.r==='Africa'&&(r==='eq:N'?c.c[1]/S_<=90:r==='eq:S'&&c.c[1]/S_>90)));
+const inReg=(id,regs)=>inRegMap(byId[id],regs);
+const SUBS=[['Africa',['eq:N','eq:S','sub:Northern Africa','sub:Western Africa','sub:Middle Africa','sub:Eastern Africa','sub:Southern Africa']],
+ ['Europe',['sub:Northern Europe','sub:Western Europe','sub:Southern Europe','sub:Eastern Europe']],
+ ['Asia',['sub:Central Asia','sub:Eastern Asia','sub:South-Eastern Asia','sub:Southern Asia','sub:Western Asia']],
+ ['North America',['sub:Northern America','sub:Central America','sub:Caribbean']],
+ ['Oceania',['sub:Australia and New Zealand','sub:Melanesia','sub:Micronesia','sub:Polynesia']]];
+const lab=k=>T[S.lang][k]||k.replace(/^sub:/,'');
+const regLabel=a=>a.length>3?a.slice(0,3).map(lab).join(' + ')+' +'+(a.length-3):a.map(lab).join(' + ');
+// "Zoom to region" box for one or several selected regions (union of the hand-picked boxes)
+function viewFor(regs){if(regs.includes('World'))return VIEWS.World;const bx=[];
+ regs.forEach(r=>{if(VIEWS[r])return bx.push(VIEWS[r]);   // sub-regions: union of the countries' main-landmass boxes (+2° margin)
+  DATA.forEach(c=>{if(!inRegMap(c,[r]))return;const b=c.b||[c.c[0]-20,c.c[1]-20,c.c[0]+20,c.c[1]+20];bx.push([b[0]/S_-182,90-b[3]/S_-2,b[2]/S_-178,90-b[1]/S_+2])})});
+ if(!bx.length)return VIEWS.World;
+ return[Math.min(...bx.map(a=>a[0])),Math.min(...bx.map(a=>a[1])),Math.max(...bx.map(a=>a[2])),Math.max(...bx.map(a=>a[3]))]}
+
+/* ===== Map drawing ===== */
+const NS='http://www.w3.org/2000/svg';let els={},dots=[];
+function mk(tag,at,par){const e=document.createElementNS(NS,tag);for(const k in at)e.setAttribute(k,at[k]);par.appendChild(e);return e}
+// (Re)builds the SVG for one of the embedded maps. Called on boot and when the map detail is changed on the start screen.
+function loadMap(key){
+ curMap=key;DATA=MAPS[key];byId={};els={};dots=[];$('land').innerHTML='';$('dots').innerHTML='';
+ DATA.forEach(c=>byId[c.id]=c);
+DATA.forEach(c=>{
+ els[c.id]=[];
+ if(c.d){const p=mk('path',{d:c.d,class:'c','data-id':c.id},$('land'));els[c.id].push(p)}
+ if(c.a<6||!c.d){ // micro-state: visible dot + oversized invisible hit area (like Seterra)
+  const g={cx:c.c[0],cy:c.c[1]};
+  const dot=mk('circle',{...g,class:'dot'},$('dots')),hit=mk('circle',{...g,class:'hit','data-id':c.id},$('dots'));
+  dots.push({dot,hit});els[c.id].push(dot,hit)}
+});
+ draw();
+}
+const cur={k:1,x:0,y:0},tgt={k:1,x:0,y:0};let K0=1;
+const box=()=>$('map').getBoundingClientRect();
+function fitWorld(){const b=box();K0=Math.min(b.width/(360*S_),b.height/(150*S_));return viewOf(VIEWS.World)}
+function viewOf(v){const b=box(),x0=(v[0]+180)*S_,x1=(v[2]+180)*S_,y0=(90-v[3])*S_,y1=(90-v[1])*S_;
+ const k=Math.min(b.width/(x1-x0),b.height/(y1-y0))*.92;return{k,x:b.width/2-k*(x0+x1)/2,y:b.height/2-k*(y0+y1)/2}}
+function go(v,instant){if(S.set.lockCam&&!instant)return;   // camera lock: only game start / resize may place the view
+ Object.assign(tgt,v);if(instant)Object.assign(cur,v);raf()}
+let anim=0,last=0;function raf(){if(!anim)anim=requestAnimationFrame(step)}
+// Camera easing used by EVERYTHING that moves the view (wheel, drag, +/−, reset, zoom to region, focus on a missed country, camera return):
+// each frame the view covers a fraction of the way to its target, independent of the monitor's refresh rate.
+// Strength = "Camera smoothness" setting (0 = instant … 10 = very floaty).
+const smoothF=()=>{const v=S.set.smooth;return v===0?1:Math.max(.03,.5*Math.pow(.78,v))};
+function step(ts){anim=0;const f=smoothF(),dt=last?Math.min(ts-last,50)/16.667:1,al=f>=1?1:1-Math.pow(1-f,dt);last=ts;let m=0;
+ for(const q of['k','x','y']){const d=tgt[q]-cur[q];cur[q]+=d*al;m=Math.max(m,Math.abs(d)/(q==='k'?cur.k:1))}
+ if(m<.001||f>=1)Object.assign(cur,tgt);draw();if(cur.k!==tgt.k||cur.x!==tgt.x||cur.y!==tgt.y)raf();else last=0}
+function draw(){$('w').setAttribute('transform',`translate(${cur.x} ${cur.y}) scale(${cur.k})`);
+ const r=5/cur.k;dots.forEach(o=>{o.dot.setAttribute('r',r);o.hit.setAttribute('r',r*2.4)})}
+function zoomAt(f,px,py){if(S.set.lockCam)return;const k=Math.min(Math.max(tgt.k*f,K0*.9),K0*60),r=k/tgt.k;tgt.x=px-(px-tgt.x)*r;tgt.y=py-(py-tgt.y)*r;tgt.k=k;raf()}
+const M=$('map');let drag=null,dragged=false,downId=null,DRAGT=8;   // DRAGT = px the mouse must travel before a press becomes a camera drag (set in the Interface panel)
+M.addEventListener('wheel',e=>{e.preventDefault();if(S.set.lockCam)return;const b=box();zoomAt(Math.exp(-e.deltaY*.0016),e.clientX-b.left,e.clientY-b.top)},{passive:false});
+M.addEventListener('mousedown',e=>{if(e.button!==0)return;drag={x:e.clientX,y:e.clientY,tx:tgt.x,ty:tgt.y};dragged=false;downId=(e.target.dataset&&e.target.dataset.id)||null});
+addEventListener('mousemove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+ if(!dragged){if(Math.hypot(dx,dy)<=DRAGT)return;dragged=true;if(!S.set.lockCam)M.classList.add('drag')}   // below the threshold the camera does NOT move at all
+ if(S.set.lockCam)return;tgt.x=drag.tx+dx;tgt.y=drag.ty+dy;raf()});   // the view follows the target with the same easing (glides a bit after release)
+// A country is picked on mouse UP, for the country under the spot where the press STARTED, so a little hand jitter or sliding over a border can't lose the click.
+addEventListener('mouseup',e=>{if(drag&&e.button===0&&!dragged&&downId)onClick(downId,e);drag=null;dragged=false;downId=null;M.classList.remove('drag')});
+addEventListener('contextmenu',e=>{if(!(e.target.closest&&e.target.closest('textarea,input[type=text]')))e.preventDefault()});   // no browser menu on right click
+$('zi').onclick=()=>{const b=box();zoomAt(1.6,b.width/2,b.height/2)};
+$('zo').onclick=()=>{const b=box();zoomAt(1/1.6,b.width/2,b.height/2)};
+$('zr').onclick=()=>go(fitWorld());
+$('zg').onclick=()=>go(viewOf(viewFor((G&&G.regs)||S.set.regs)));
+
+/* ===== Game logic ===== */
+let G=null;                      // = S.game (persisted)
+const now=()=>performance.now();
+const gt=()=>G.t+(G.run?Date.now()-G.ts:0);   // game time excludes pauses
+const hold=()=>{if(G&&G.run){G.t+=Date.now()-G.ts;G.run=false}};
+const unhold=()=>{if(G&&!G.run){G.ts=Date.now();G.run=true}};
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+// Every country `reps` times, as `reps` shuffled rounds. A round never starts with the country that ended the previous one, so the same country is never asked twice in a row.
+function buildOrder(ids,reps){const n=ids.length,out=[];if(n<2)reps=1;
+ for(let r=0;r<reps;r++){const round=shuffle(ids.slice());
+  if(out.length&&round[0]===out[out.length-1]){const j=1+Math.floor(Math.random()*(n-1));[round[0],round[j]]=[round[j],round[0]]}
+  out.push(...round)}
+ return out}
+function newGame(){const s=S.set;if(curMap!==s.map)loadMap(s.map);const regs=s.regs.slice(),ids=DATA.filter(c=>inReg(c.id,regs)).map(c=>c.id);
+ G=S.game={regs,reps:s.reps,u:ids.length,swr:!!s.swr,mode:s.mode,n:s.n,show:s.show,keep:!s.hard,map:s.map,order:buildOrder(ids,s.reps),i:0,done:{},left:s.n,pool:s.n,errors:0,score:0,first:0,t:0,ts:Date.now(),run:true,cs:0,wr:0,fin:false,t0:null};
+ save();show('');paint();go(viewOf(viewFor(G.regs)),true);next(true)}
+const cid=()=>G.order[G.i];
+function paint(){for(const id in els){els[id].forEach(e=>e.classList.remove('hint','bad','okf','skf','fo'));state(id)}} // also clears leftover highlight classes (restart / change region)
+function state(id){const k=G&&G.keep!==false,s=!G||!inReg(id,G.regs)?'off':k&&G.done[id]===1?'ok':k&&G.done[id]===0?'skip':'on'; // keep=false: found countries look normal and stay clickable
+ els[id].forEach(e=>e.dataset.s=s)}
+function next(first){if(G.i>=G.order.length)return finish();
+ if(!first&&G.u&&G.i%G.u===0){G.done={};paint()}   // a new round starts: colours are reset
+ if(G.mode==='per')G.left=G.n;G.wr=0;G.cs=gt();render();if(!first)save()}
+const id_done=id=>G.done[id]!==undefined;
+function render(){
+ const id=cid(),sh=G.show;
+ $('task').innerHTML=(sh!=='name'?flag(id):'')+(sh!=='flag'?`<span class="nm">${nm(id)}</span>`:'');
+ $('sc').textContent=G.score;$('prog').textContent=G.i+' / '+G.order.length;
+ const inf=!G.n,v=G.mode==='per'?G.left:G.pool;
+ $('att').innerHTML=inf?'<b>∞</b>':Array.from({length:G.n},(_,i)=>`<span class="pip ${i<v?'':'x'}"></span>`).join('')+`<span class="mute">&nbsp;${t(G.mode==='per'?'per':'glob')}</span>`}
+function pop(txt,col,e,cls){const p=document.createElement('div');p.id='pop';p.textContent=txt;p.style.color=col;p.style.left=(e?e.clientX:innerWidth/2)+'px';p.style.top=(e?e.clientY:120)+'px';document.body.appendChild(p);
+ if(cls==='neg'){p.className='neg';p.style.fontSize=({s:17,m:24,l:32})[S.set.popSize||'m']+'px';setTimeout(()=>p.remove(),2500);return}   // mistake popup: big yellow pill, stays ~2 s (CSS animation)
+ p.style.transform='translateX(-50%)';requestAnimationFrame(()=>{p.style.transform='translate(-50%,-40px)';p.style.opacity=0});setTimeout(()=>p.remove(),1000)}
+const ft={};
+// Green appears instantly, then fades back over 1 s (.okf has no transition, .fo adds a 1 s one).
+function flashFade(id,cls){const L=els[id];(ft[id]||[]).forEach(clearTimeout);L.forEach(e=>{e.classList.remove('fo');e.classList.add(cls)});
+ ft[id]=[setTimeout(()=>L.forEach(e=>{e.classList.remove(cls);e.classList.add('fo')}),60),setTimeout(()=>L.forEach(e=>e.classList.remove('fo')),1100)]}
+function flash(id,cls,ms){els[id].forEach(e=>e.classList.add(cls));if(ms)setTimeout(()=>els[id].forEach(e=>e.classList.remove(cls)),ms)}
+function onClick(id,e){
+ if(!G||G.fin||!G.run||G.lost||!inReg(id,G.regs))return;   // G.lost = out of tries, waiting for Continue / Restart
+ if(id!==cid()&&id_done(id)&&G.keep!==false)return;
+ if(G.t0===null)G.t0=gt();   // first country click: the reported game time starts here (t0===undefined = save from an older version: whole time counts) // normal mode: found countries are inert. Hard mode: falls through and a re-click counts as a wrong try
+ if(id===cid()){
+  const bonus=Math.round(BONUS*Math.max(0,1-(gt()-G.cs)/BTIME)),gain=Math.max(0,BASE-PEN*G.wr+bonus);
+  G.score+=gain;if(G.wr===0)G.first++;G.done[id]=1;state(id);if(G.keep===false)flashFade(id,'okf');pop('+'+gain,'#3aa874',e);if(S.set.camReset)go(viewOf(viewFor(G.regs)));G.i++;next();
+ }else{
+  G.errors++;G.wr++;flash(id,'bad',450);
+  if(G.n){if(G.mode==='per')G.left--;else G.pool--;}
+  const pen=Math.min(PEN,G.score);G.score-=pen;pop('−'+PEN+(G.swr?' '+nm(id):''),'#ffd447',e,'neg');render();save();
+  if(G.n&&(G.mode==='per'?G.left:G.pool)<=0)exhaust();}
+}
+function focusOn(id){const c=byId[id],[x0,y0,x1,y1]=c.b||[c.c[0]-20,c.c[1]-20,c.c[0]+20,c.c[1]+20],bx=box(),
+ w=Math.max(x1-x0,40),h=Math.max(y1-y0,40),cx=(x0+x1)/2,cy=(y0+y1)/2,k=Math.min(Math.min(bx.width/w,bx.height/h)*.55,K0*60);
+ go({k,x:bx.width/2-k*cx,y:bx.height*.45-k*cy})}
+function exhaust(){G.lost=true;if(S.set.tmStop===false)unhold();else hold();   // setting: the timer stops while the lost-country panel is open (default) or keeps running
+ const id=cid();flash(id,'hint');focusOn(id);$('mT').textContent=t('itwas');
+ $('mC').innerHTML=flag(id)+`<span style="font:600 22px Georgia,serif">${nm(id)}</span>`;$('miss').classList.add('show');save()}
+$('mCont').onclick=()=>{const id=cid();els[id].forEach(e=>e.classList.remove('hint'));G.lost=false;G.done[id]=0;state(id);G.i++;$('miss').classList.remove('show');unhold();
+ if(G.mode==='glob'&&G.n&&G.pool<=0)finish();else next()};
+$('mRst').onclick=()=>{$('miss').classList.remove('show');paint();newGame()};
+function finish(){hold();G.fin=true;const ok=Object.values(G.done).filter(v=>v===1).length,tot=G.order.length;
+ const used=G.t0===undefined?G.t:G.t-(G.t0===null?G.t:G.t0); // reported time = from the first click to the end, pauses excluded
+ const rec={regs:G.regs,score:G.score,time:used,err:G.errors,pct:Math.round(100*G.first/tot),d:Date.now()};S.recent=[rec,...S.recent].slice(0,5);save();
+ const f=ms=>{const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+ $('eT').textContent=t('done')+' — '+regLabel(G.regs);
+ $('eTab').innerHTML=[[t('time'),f(used)],[t('pts'),G.score],[t('err'),G.errors],[t('first'),rec.pct+'% ('+G.first+'/'+tot+')']].map(r=>`<tr><td>${r[0]}</td><td><b>${r[1]}</b></td></tr>`).join('')+
+  `<tr><td colspan=2 class="mute" style="padding-top:12px">${t('last')}</td></tr>`+S.recent.slice(1).map(r=>`<tr><td class="mute">${regLabel(r.regs||[r.reg])}</td><td class="mute">${r.score} · ${f(r.time)}</td></tr>`).join('');
+ show('end')}
+$('eAgain').onclick=()=>newGame();
+$('eChg').onclick=()=>{G=S.game=null;save();paint();show('start');ui()};
+
+/* ===== Screens & settings ===== */
+function show(n){if(n!=='pause')$('miss').classList.remove('show');['start','pause','end'].forEach(s=>$(s).classList.toggle('show',s===n))}
+function seg(id,opts,val,fn){const el=$(id);el.innerHTML='';opts.forEach(([v,l])=>{const b=document.createElement('button');b.textContent=l;if(v===val)b.className='sel';b.onclick=()=>{fn(v);save();ui()};el.appendChild(b)})}
+// Region buttons are multi-select toggles; "Whole World" is exclusive and at least one stays selected.
+function regSeg(){const el=$('regs'),s=S.set;el.innerHTML='';
+ REGS.forEach(r=>{const b=document.createElement('button');b.textContent=t(r);if(s.regs.includes(r))b.className='sel';
+  b.onclick=()=>toggleReg(r);el.appendChild(b)})}
+// Toggle one region token. "World" is exclusive; at least one token always stays selected.
+function toggleReg(r){const s=S.set;let a=s.regs;if(r==='World')a=['World'];else{a=a.filter(x=>x!=='World');a=a.includes(r)?a.filter(x=>x!==r):[...a,r];if(!a.length)a=[r]}s.regs=a;save();ui()}
+// Sub-region picker (modal): one captioned block per continent, separated by divider lines.
+function subSeg(){const s=S.set,body=$('subBody');body.innerHTML='';
+ SUBS.forEach(([cont,toks])=>{const sec=document.createElement('section');sec.className='sec';sec.innerHTML='<h2></h2><div class="seg" style="margin-top:8px"></div>';sec.firstChild.textContent=t(cont);
+  toks.forEach(k=>{const b=document.createElement('button');b.textContent=lab(k);if(s.regs.includes(k))b.className='sel';b.onclick=()=>toggleReg(k);sec.lastChild.appendChild(b)});body.appendChild(sec)})}
+function ui(){
+ document.documentElement.lang=S.lang;const s=S.set;
+ $('tTitle').textContent=t('title');$('tSub').textContent=t('sub');$('lReg').textContent=t('reg');$('lMode').textContent=t('mode');$('lN').textContent=t('n');$('lShow').textContent=t('show');$('lLang').textContent=t('lang');
+ $('sGame').textContent=t('sGame');$('sRules').textContent=t('sRules');$('sShow').textContent=t('sShow');$('sSite').textContent=t('sSite');
+ $('lReps').textContent=t('reps');$('reps').value=s.reps;$('lSwr').textContent=t('swr');$('lCam').textContent=t('cam');$('pCam').textContent=t('cam');$('pLock').textContent=t('lock');$('lTm').textContent=$('pTm').textContent=t('tm');$('lTm').parentNode.title=$('pTm').parentNode.title=t('tmTip');$('tm').checked=$('tm2').checked=s.tmStop!==false;$('lock2').checked=!!s.lockCam;document.body.classList.toggle('camlock',!!s.lockCam);$('lSm').textContent=t('smooth');$('pSm').textContent=t('smooth');smShow();$('cam').checked=$('cam2').checked=!!s.camReset;$('lPop').textContent=t('popSize');
+ seg('popSeg',[['s',t('sizeS')],['m',t('sizeM')],['l',t('sizeL')]],s.popSize||'m',v=>{s.popSize=v;setTimeout(()=>{const r=$('popSeg').getBoundingClientRect();pop('−25','#ffd447',{clientX:r.left+r.width/2,clientY:r.top-8},'neg')},0)}); // click = live preview
+ $('swr').checked=!!s.swr;
+ $('lMap').textContent=t('map');$('mapNote').textContent=t('mapNote');
+ $('lHard').textContent=t('hard');$('lHard').parentNode.title=t('hardTip');$('hard').checked=!!s.hard;$('bGo').textContent=t('go');$('bMenu').textContent=t('menu');$('sCtl').textContent=t('sCtl');$('lRk').textContent=t('rk');$('pRk').textContent=t('rk');rkShow();$('lSc').textContent=t('score');$('zr').textContent=t('reset');$('zg').textContent=t('zreg');
+ $('pT').textContent=t('paused');$('pRes').textContent=t('res');$('pRst').textContent=t('rst');$('pMenu').textContent=t('chg');$('pL').textContent=t('lang');
+ $('mCont').textContent=t('cont');$('mRst').textContent=t('rst');$('eAgain').textContent=t('again');$('eChg').textContent=t('chg');
+ regSeg();subSeg();
+ {const n=s.regs.filter(x=>x.includes(':')).length;$('bSub').textContent=t('subs')+(n?' · '+n:'')+' ›';$('bSub').className=n?'sel':'';$('subInfo').textContent=n?regLabel(s.regs.filter(x=>x.includes(':'))):'';
+  $('subT').textContent=t('subs');$('subSub').textContent=t('subSub');$('subClear').textContent=t('subClear');$('subDone').textContent=t('subDone')}
+ seg('mapSeg',MKEYS.map(k=>[k,(k==='110'?t('mapLow')+' ':k==='50'?t('mapHigh')+' ':'')+k+'m']),s.map,v=>{s.map=v;loadMap(v);paint()});
+ {const nU=MAPS[s.map].filter(c=>inRegMap(c,s.regs)).length;$('stat').textContent=t('count')+': '+nU+(s.reps>1?' × '+s.reps+' = '+nU*s.reps:'');$('bGo').disabled=!nU}
+ seg('mode',[['per',t('per')],['glob',t('glob')]],s.mode,v=>s.mode=v);
+ seg('num',[[1,'1'],[3,'3'],[5,'5'],[0,'∞']],s.n,v=>s.n=v);
+ seg('show',[['flag',t('flag')],['name',t('name')],['both',t('both')]],s.show,v=>s.show=v);
+ const L=[['en','English'],['ru','Русский']],sl=v=>{S.lang=v};seg('lang',L,S.lang,sl);seg('lang2',L,S.lang,sl);
+ if(G&&!G.fin)render();
+}
+$('reps').onchange=e=>{S.set.reps=Math.min(10,Math.max(1,Math.round(+e.target.value)||1));save();ui()};
+function smShow(){const v=S.set.smooth;$('smooth').value=$('smooth2').value=v;$('smV').textContent=$('smV2').textContent=v?v:t('off')}
+$('smooth').oninput=$('smooth2').oninput=e=>{S.set.smooth=+e.target.value;smShow();save()};   // same slider on the start screen and in the pause menu
+$('tm').onchange=$('tm2').onchange=e=>{S.set.tmStop=e.target.checked;save();ui()};   // same switch on the start screen and in the pause menu
+$('lock2').onchange=e=>{S.set.lockCam=e.target.checked;save();ui()};   // pause menu: camera stays exactly where it is
+$('cam').onchange=$('cam2').onchange=e=>{S.set.camReset=e.target.checked;save();ui()};   // same switch on the start screen and in the pause menu
+$('swr').onchange=e=>{S.set.swr=e.target.checked;save()};
+$('bSub').onclick=()=>$('subs').classList.add('show');
+$('subDone').onclick=()=>$('subs').classList.remove('show');
+$('subClear').onclick=()=>{const s=S.set;s.regs=s.regs.filter(x=>!x.includes(':'));if(!s.regs.length)s.regs=['World'];save();ui()};
+$('hard').onchange=e=>{S.set.hard=e.target.checked;save()};
+$('bGo').onclick=newGame;
+$('bMenu').onclick=()=>{if(!G||G.fin)return;hold();show('pause');save()};
+$('pRes').onclick=()=>{show('');if(!$('miss').classList.contains('show')||S.set.tmStop===false)unhold();save()};
+$('pRst').onclick=newGame;
+$('pMenu').onclick=()=>{G=S.game=null;save();paint();show('start');ui()};
+// ---- Restart: top-bar button + configurable key (stored as KeyboardEvent.code, so it works on any keyboard layout; default R) ----
+let capturing=null;   // id of the key button that is waiting for a key press
+const keyLabel=c=>c.replace(/^Key|^Digit/,'');
+function rkShow(){['rkey','rkey2'].forEach(id=>{$(id).textContent=capturing===id?'…':keyLabel(S.set.rkey);$(id).title=t('rkTip')});
+ $('bRestart').textContent=t('restart')+' ('+keyLabel(S.set.rkey)+')'}
+const restart=()=>{if(G)newGame()};   // same region(s) and settings as the current game
+$('bRestart').onclick=restart;
+$('rkey').onclick=$('rkey2').onclick=ev=>{capturing=ev.currentTarget.id;rkShow()};
+addEventListener('mousedown',e=>{if(capturing&&!e.target.closest('#rkey,#rkey2')){capturing=null;rkShow()}});
+addEventListener('keydown',e=>{
+ if(capturing){e.preventDefault();if(/^(Shift|Control|Alt|Meta|OS)/.test(e.code))return;   // modifiers alone are ignored, Esc cancels
+  if(e.code!=='Escape'){S.set.rkey=e.code;save()}capturing=null;rkShow();return}
+ if(e.key==='Escape'){if($('subs').classList.contains('show'))$('subs').classList.remove('show');else if(G&&!G.fin&&G.run)$('bMenu').click();return}
+ if(e.code===S.set.rkey&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.repeat&&!(e.target.matches&&e.target.matches('input[type=number],select,textarea')))restart()});
+addEventListener('resize',()=>go(fitWorld(),true));
+
+/* ===== Boot: restore saved game if there is one ===== */
+if(!MAPS[S.set.map])S.set.map=MKEYS[0];
+if(S.game&&S.game.map&&!MAPS[S.game.map])S.game=null;   // saved game used a map that is no longer embedded
+loadMap(S.game&&S.game.map||S.set.map);
+go(fitWorld(),true);ui();
+if(S.game&&!S.game.fin&&S.game.order){G=S.game;G.regs=G.regs||[G.reg||'World'];G.u=G.u||G.order.length;G.run=false;G.lost=false;paint();go(viewOf(viewFor(G.regs)),true);render();if(G.n&&(G.mode==='per'?G.left:G.pool)<=0)exhaust();else show('pause')}
+else{S.game=null;paint()}
+</script></body></html>

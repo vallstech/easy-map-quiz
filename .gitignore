@@ -1,0 +1,19 @@
+# Chrome profile created by tooling (never commit)
+_chrome/
+
+# Duplicate GeoJSON copies
+data/geojson/old/
+
+# OS / editor junk
+Thumbs.db
+Desktop.ini
+desktop.ini
+.DS_Store
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

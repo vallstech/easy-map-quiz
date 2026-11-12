@@ -1,0 +1,90 @@
+/* The design: flat "esports / max-minimal" skin, inlined AFTER the engine's base CSS.
+   Everything is driven by CSS variables that the Interface panel (panel.js, button "UI" or F2) sets. */
+:root{--sea:#06080b;--land:#161c24;--land-hi:#27323f;--line:#06080b;--ok:#19e68c;--bad:#ff3b4e;--gold:#00e0ff;--ink:#e6edf3;--mute:#6b7a8a;--panel:#0b0f14;--edge:#1d2631;
+ --font:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;--r:0px;--bw:1px;--ui:1;--tn:22px;--tf:30px;--hudop:1;--cw:.6}
+html,body{background:var(--sea);color:var(--ink);font:13px/1.35 var(--font);letter-spacing:.02em}
+button,input,select,textarea{font-family:var(--font)}
+*{box-shadow:none!important}                      /* perf: no shadows anywhere */
+.panel,button,select,input[type=number],textarea{border-radius:var(--r);border:var(--bw) solid var(--edge);background:var(--panel);color:var(--ink)}
+button{padding:6px 12px;text-transform:uppercase;font-size:11px;letter-spacing:.1em}
+button:hover{border-color:var(--gold);color:var(--gold)}
+button.pri{background:var(--gold);border-color:var(--gold);color:var(--sea);font-weight:700}
+button.pri:hover{color:var(--sea);filter:brightness(1.15)}
+.panel button.sel,.seg button.sel{background:transparent;border-color:var(--gold);color:var(--gold)}
+button:disabled{opacity:.35}
+input{accent-color:var(--gold)}
+.mute,#score small{color:var(--mute)}
+
+/* ---- map ---- */
+#map{contain:layout paint}
+#w{will-change:transform}
+.c{fill:var(--land);stroke:var(--line);stroke-width:var(--cw);transition:none}   /* perf: no per-path transitions */
+.c[data-s=off]{fill:color-mix(in srgb,var(--land) 50%,var(--sea))}
+.c[data-s=on]:hover{fill:var(--land-hi)}
+.c[data-s=ok]{fill:var(--ok)}
+.c[data-s=skip]{fill:color-mix(in srgb,var(--bad) 40%,var(--land))}
+.c.fo,.dot.fo{transition:fill 1s}                 /* the green fade-out of Hard mode stays */
+.c.okf{fill:var(--ok)!important}.c.bad,.c.hint{fill:var(--bad)!important}
+.dot{r:var(--dr,5px);transition:none;fill:var(--mute);stroke:var(--sea)}   /* radius = ONE css variable written per frame instead of N attributes */
+.hit{r:calc(var(--dr,5px)*2.4)}
+.dot[data-s=off]{fill:var(--edge)}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:color-mix(in srgb,var(--bad) 60%,var(--mute))}
+.dot.okf{fill:var(--ok)}.dot.bad,.dot.hint{fill:var(--bad)}
+.shape-crisp .c{shape-rendering:crispEdges}.shape-speed .c{shape-rendering:optimizeSpeed}
+.fastpan.mv .c{stroke:none}                       /* optional: borders off while moving (big FPS gain on the 50m map) */
+.nodots .dot{display:none}
+.still .c.hint,.still #pop.neg{animation:none}
+
+/* ---- HUD ---- */
+#top,#zoom,#att,.dock{zoom:var(--ui)}
+#top,#zoom,#att{opacity:var(--hudop)}
+#task{background:transparent;border:none;border-left:3px solid var(--gold);padding:4px 14px;min-width:0;justify-content:flex-start}
+#task .nm{font:700 var(--tn)/1 var(--font);text-transform:uppercase;letter-spacing:.08em}
+.fl{height:var(--tf);border-radius:0}.fe{font-size:var(--tf)}
+#score{background:transparent;border:none;padding:0 4px}
+#score b{font:700 24px/1.1 var(--font);color:var(--gold);font-variant-numeric:tabular-nums}
+#score small{font-size:10px;text-transform:uppercase;letter-spacing:.14em}
+#att{background:transparent;border:none;padding:0}.pip{border-radius:0;width:20px;height:4px}.pip.x{background:var(--edge)}
+#att .mute{display:none}
+#zoom{gap:4px}#zoom button{padding:6px 10px}
+.dock{border-left:3px solid var(--gold)}#mC span{font-family:var(--font)!important;text-transform:uppercase}
+#pop{font-family:var(--font)}
+#pop.neg{border-radius:var(--r);border-width:2px;text-transform:uppercase;letter-spacing:.04em}
+
+/* ---- start / pause / end screens ---- */
+.scr{background:color-mix(in srgb,var(--sea) 94%,transparent)}
+.box h1{font:700 16px var(--font);letter-spacing:.22em;text-transform:uppercase}
+#tSub{display:none}
+.sec{margin-top:12px;padding-top:8px;border-top:var(--bw) solid var(--edge)}
+.sec h2{color:var(--gold);font:600 10px var(--font);letter-spacing:.22em}
+.row{margin:7px 0}
+td{border-bottom:var(--bw) solid var(--edge)}
+
+body.camlock #map{cursor:default}.camlock #zoom button{opacity:.35}   /* camera locked (pause menu) */
+
+/* ---- layout switches (set by the Interface panel) ---- */
+.hide-score #score,.hide-zoom #zoom,.hide-att #att,.hide-menu #bMenu,.hide-restart #bRestart,.hide-prog #prog{display:none}
+.task-bottom #task{position:fixed;left:50%;bottom:14px;transform:translateX(-50%)}
+.task-bottom #att{bottom:auto;top:14px}
+.zoom-right #zoom{left:auto;right:12px;bottom:52px}
+
+/* ---- Interface panel ---- */
+#uib{position:fixed;right:12px;bottom:12px;z-index:70;opacity:.5;padding:4px 10px}#uib:hover{opacity:1}
+#ui{position:fixed;top:0;right:0;bottom:0;width:350px;z-index:80;background:var(--panel);border-left:var(--bw) solid var(--edge);overflow:auto;padding:14px 16px;display:none}
+#ui.open{display:block}
+#ui .hd{display:flex;gap:6px;align-items:center;justify-content:space-between;margin-bottom:6px}
+#ui .hd b{letter-spacing:.22em;font-size:12px}
+#ui .bt{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+#ui label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:6px 0}
+#ui label>span{flex:1}
+#ui input[type=range]{width:120px}
+#ui input[type=color]{width:36px;height:22px;padding:0;background:none;border:var(--bw) solid var(--edge)}
+#ui b.v{min-width:3ch;text-align:right;font-weight:400;color:var(--mute)}
+#ui textarea{width:100%;height:90px;resize:vertical;font-size:12px}
+#fps{position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:70;font:11px var(--font);color:var(--ok);pointer-events:none}
+
+/* ---- on-screen timer ---- */
+#tmr{position:fixed;z-index:6;font:700 var(--tms,20px)/1 var(--font);font-variant-numeric:tabular-nums;color:var(--ink);opacity:var(--hudop);pointer-events:none;zoom:var(--ui)}
+body[data-tmpos=score] #tmr{top:66px;right:16px}
+body[data-tmpos=task] #tmr{top:60px;left:50%;transform:translateX(-50%)}
+body[data-tmpos=menu] #tmr{top:60px;left:14px}
+.tm-hide #tmr{display:none}

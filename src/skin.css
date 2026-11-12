@@ -37,12 +37,17 @@ input{accent-color:var(--gold)}
 /* ---- HUD ---- */
 #top,#zoom,#att,.dock{zoom:var(--ui)}
 #top,#zoom,#att{opacity:var(--hudop)}
-#task{background:transparent;border:none;border-left:3px solid var(--gold);padding:4px 14px;min-width:0;justify-content:flex-start}
+#task{background:transparent;border:none;border-left:3px solid var(--gold);padding:4px 14px;min-width:0;justify-content:flex-start;flex-wrap:wrap;row-gap:2px}
 #task .nm{font:700 var(--tn)/1 var(--font);text-transform:uppercase;letter-spacing:.08em}
 .fl{height:var(--tf);border-radius:0}.fe{font-size:var(--tf)}
-#score{background:transparent;border:none;padding:0 4px}
+#score{background:transparent;border:none;padding:0 4px;text-align:right}
 #score b{font:700 24px/1.1 var(--font);color:var(--gold);font-variant-numeric:tabular-nums}
 #score small{font-size:10px;text-transform:uppercase;letter-spacing:.14em}
+#score #tmr{margin-top:2px}
+#menu{gap:8px;padding:5px 8px}
+#menu #tmr,#task #tmr{margin-left:12px}
+.task-bottom #menu{position:fixed;left:12px;bottom:14px}
+#score #tmr{margin-top:2px}
 #att{background:transparent;border:none;padding:0}.pip{border-radius:0;width:20px;height:4px}.pip.x{background:var(--edge)}
 #att .mute{display:none}
 #zoom{gap:4px}#zoom button{padding:6px 10px}
@@ -63,6 +68,8 @@ body.camlock #map{cursor:default}.camlock #zoom button{opacity:.35}   /* camera 
 
 /* ---- layout switches (set by the Interface panel) ---- */
 .hide-score #score,.hide-zoom #zoom,.hide-att #att,.hide-menu #bMenu,.hide-restart #bRestart,.hide-prog #prog{display:none}
+/* The menu host keeps the timer even when both of its buttons are hidden */
+.hide-menu.hide-restart #menu{display:none}
 .task-bottom #task{position:fixed;left:50%;bottom:14px;transform:translateX(-50%)}
 .task-bottom #att{bottom:auto;top:14px}
 .zoom-right #zoom{left:auto;right:12px;bottom:52px}
@@ -82,9 +89,14 @@ body.camlock #map{cursor:default}.camlock #zoom button{opacity:.35}   /* camera 
 #ui textarea{width:100%;height:90px;resize:vertical;font-size:12px}
 #fps{position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:70;font:11px var(--font);color:var(--ok);pointer-events:none}
 
-/* ---- on-screen timer ---- */
-#tmr{position:fixed;z-index:6;font:700 var(--tms,20px)/1 var(--font);font-variant-numeric:tabular-nums;color:var(--ink);opacity:var(--hudop);pointer-events:none;zoom:var(--ui)}
-body[data-tmpos=score] #tmr{top:66px;right:16px}
-body[data-tmpos=task] #tmr{top:60px;left:50%;transform:translateX(-50%)}
-body[data-tmpos=menu] #tmr{top:60px;left:14px}
+/* ---- on-screen timer ----
+   Lives INSIDE the HUD panel it belongs to (created by ui/panel.js), so it can never
+   overlap the task name/flag however big those are: the panels are flex items of the
+   top bar / the zoom column and the timer is one more row inside them. ---- */
+#tmr{font:700 var(--tms,20px)/1.15 var(--font);font-variant-numeric:tabular-nums;color:var(--ink);pointer-events:none;white-space:nowrap}
+/* the seconds part keeps a fixed width, so the running hundredths do not make it jump */
+#tmr .h{display:inline-block;min-width:3.2ch;text-align:right}
+#tmr .f{opacity:.75}
+/* Position = which panel hosts the timer: Under score (default), Under task, Under menu.
+   The timer is moved between the hosts by ui/panel.js. */
 .tm-hide #tmr{display:none}

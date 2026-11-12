@@ -11,7 +11,7 @@ const PRESETS={cyber:CYBER,
  amber:{...CYBER,sea:'#0b0800',land:'#1d1600',landHi:'#3a2c00',line:'#0b0800',accent:'#ffb000',ok:'#7dff5a',bad:'#ff4d2e',panel:'#100c00',edge:'#2a2000',ink:'#ffd27a',mute:'#8a6a1f'},
  light:{...CYBER,sea:'#eef1f4',land:'#cdd5de',landHi:'#b3bfcc',line:'#eef1f4',accent:'#0057ff',ok:'#12a05c',bad:'#d92c3f',panel:'#ffffff',edge:'#cfd6de',ink:'#0d1117',mute:'#69758a'}};
 const DEF={...CYBER,ui:1,tn:22,tf:30,hudop:1,cw:.6,dot:1,showDots:true,shape:'auto',fastpan:false,still:false,fps:false,
- drag:8,showTimer:true,tmSize:20,tmTenths:false,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:''};
+ drag:8,showTimer:true,tmSize:20,tmTenths:false,tmHundredths:true,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:''};
 let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(U))}catch(e){}};
 
@@ -26,11 +26,21 @@ function fpsToggle(){
   (function f(t){if(!fpsOn)return;n++;if(t-t0>=500){fe.textContent=Math.round(n*1000/(t-t0))+' FPS';n=0;t0=t}requestAnimationFrame(f)})(t0)}
  else if(!U.fps&&fpsOn){fpsOn=false;if(fe)fe.remove()}}
 
-/* ---- on-screen timer: same clock as the final stats (starts at the first click, pauses excluded) ---- */
-const tm=Object.assign(document.createElement('div'),{id:'tmr'});B.appendChild(tm);
+/* ---- on-screen timer: the same clock as the final stats (starts at the first click, pauses excluded).
+   It is not positioned by coordinates: it is MOVED INTO the HUD panel chosen in the Interface panel
+   (#score / #task / #menu), so a long task name, a big flag or a big font can never overlap it. ---- */
+const tm=Object.assign(document.createElement('div'),{id:'tmr'});
+B.appendChild(tm);
+function tmHost(){const id=U.tmPos==='task'?['task','score']:U.tmPos==='menu'?['menu','score']:['score','task'];
+ for(const h of id){const el=$(h);if(el)return el}return null}
+function tmPlace(){const h=tmHost();if(h&&tm.parentNode!==h){if(h.id==='task')h.appendChild(tm);else h.insertBefore(tm,h.querySelector('button')||null)}}
+tmPlace();
 setInterval(()=>{if(!U.showTimer)return;if(!G){tm.textContent='';return}
  let v=G.t0===undefined?(G.fin?G.t:gt()):G.t0===null?0:(G.fin?G.t:gt())-G.t0;v=Math.max(0,v);
- const s=Math.floor(v/1000),f=Math.floor(v%1000/100);tm.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+(U.tmTenths?'.'+f:'')},100);
+ const s=Math.floor(v/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
+ // hundredths are shown by default; with the "Tenths" switch on, only one decimal
+ const frac=String(Math.floor(v%1000/(U.tmTenths?100:10))).padStart(U.tmTenths?1:2,'0');
+ tm.innerHTML='<span class="h">'+(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(ss).padStart(2,'0')+'</span><span class="f">.'+frac+'</span>'},50);
 /* ---- apply settings ---- */
 const ucss=document.head.appendChild(Object.assign(document.createElement('style'),{id:'ucss'}));
 function apply(){
@@ -40,14 +50,14 @@ function apply(){
  const T=(c,on)=>B.classList.toggle(c,!!on);
  T('hide-score',U.hideScore);T('hide-prog',U.hideProg);T('hide-att',U.hideAtt);T('hide-zoom',U.hideZoom);T('hide-menu',U.hideMenu);T('hide-restart',U.hideRestart);
  T('task-bottom',U.taskPos==='bottom');T('zoom-right',U.zoomPos==='right');T('nodots',!U.showDots);T('still',U.still);T('fastpan',U.fastpan);
- DRAGT=U.drag;st.setProperty('--tms',U.tmSize+'px');B.dataset.tmpos=U.tmPos;T('tm-hide',!U.showTimer);T('shape-crisp',U.shape==='crisp');T('shape-speed',U.shape==='speed');
+ DRAGT=U.drag;st.setProperty('--tms',U.tmSize+'px');tmPlace();T('tm-hide',!U.showTimer);T('shape-crisp',U.shape==='crisp');T('shape-speed',U.shape==='speed');
  ucss.textContent=U.css||'';fpsToggle();window.draw()}
 
 /* ---- the panel: schema -> controls. Labels are "EN|RU". Types: c colour, r range, s select, k checkbox, t custom css ---- */
 const SC=[['Theme|Тема',[['c','sea','Background|Фон'],['c','land','Land|Суша'],['c','landHi','Land hover|Суша при наведении'],['c','line','Borders|Границы'],['c','accent','Accent|Акцент'],['c','ok','Correct|Верно'],['c','bad','Wrong|Ошибка'],['c','panel','Panels|Панели'],['c','edge','Panel border|Рамки'],['c','ink','Text|Текст'],['c','mute','Muted text|Второстепенный текст']]],
  ['Type & shape|Шрифт и форма',[['s','font','Font|Шрифт',{mono:'Mono',sans:'Sans',cond:'Condensed',serif:'Serif'}],['r','ui','UI scale|Масштаб интерфейса',.7,1.6,.05],['r','tn','Task name size|Размер названия',12,56,1],['r','tf','Task flag size|Размер флага',14,72,1],['r','r','Corner radius|Скругление',0,20,1],['r','bw','Border width|Толщина рамок',0,4,1]]],
  ['Map|Карта',[['r','cw','Country borders|Границы стран',0,2.5,.1],['r','dot','Micro-state dots|Точки микрогосударств',.4,3,.1],['k','showDots','Show dots|Показывать точки'],['r','drag','Click tolerance (px)|Допуск клика (px)',2,24,1],['s','shape','Rendering|Отрисовка',{auto:'Auto',crisp:'Crisp edges',speed:'Speed'}]]],
- ['Timer|Таймер',[['k','showTimer','Show timer|Показывать таймер'],['s','tmPos','Position|Позиция',{score:'Under score',task:'Under task',menu:'Under menu'}],['r','tmSize','Size|Размер',10,56,1],['k','tmTenths','Tenths|Десятые доли']]],
+ ['Timer|Таймер',[['k','showTimer','Show timer|Показывать таймер'],['s','tmPos','Position|Позиция',{score:'Under score',task:'Under task',menu:'Under menu'}],['r','tmSize','Size|Размер',10,56,1],['k','tmTenths','Tenths|Десятые доли'],['k','tmHundredths','Hundredths|Сотые доли']]],
  ['HUD|Интерфейс',[['r','hudop','HUD opacity|Прозрачность HUD',.2,1,.05],['s','taskPos','Task position|Позиция задания',{top:'Top',bottom:'Bottom'}],['s','zoomPos','Zoom buttons|Кнопки зума',{left:'Left',right:'Right'}],['k','hideScore','Hide score|Скрыть счёт'],['k','hideProg','Hide progress|Скрыть прогресс'],['k','hideAtt','Hide attempts|Скрыть попытки'],['k','hideZoom','Hide zoom buttons|Скрыть кнопки зума'],['k','hideMenu','Hide menu button|Скрыть кнопку меню'],['k','hideRestart','Hide restart button|Скрыть кнопку перезапуска']]],
  ['Performance|Производительность',[['k','fastpan','Hide borders while moving|Скрывать границы при движении'],['k','still','Reduce motion|Меньше анимаций'],['k','fps','FPS counter|Счётчик FPS']]],
  ['Custom CSS|Свой CSS',[['t']]]];

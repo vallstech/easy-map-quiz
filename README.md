@@ -2,7 +2,27 @@
 
 Seterra-style world map quiz in a flat "esports / max-minimal" design. The finished game is a single `dist/index.html` (no server, no internet).
 
-Sources: `src/template.html` (engine + base layout), `src/skin.css` (the design), `src/panel.js` (Interface panel + performance tweaks). `build.py` inlines everything.
+## Sources
+
+    src/template.html     page shell: markup + the base (engine) stylesheet. No behaviour.
+    src/skin.css          the design ("esports / max-minimal" skin)
+    src/js/               behaviour, one file per concern
+      core/config.js      map data, regions, view boxes, UI strings EN/RU, score rules, saved state
+      core/map.js         builds the SVG for an embedded map; owns els/dots
+      core/camera.js      pan/zoom, easing, mouse & wheel input
+      game/game.js        rules of a running game: rounds, scoring, timers, finish flow
+      game/keys.js        restart button + rebindable restart key, Escape
+      ui/screens.js       start / pause / end screens, settings controls
+      ui/panel.js         Interface panel (button UI, F2) + performance tweaks
+      main.js             boot: apply settings, load a map, restore a saved game
+    src/panel.js          legacy monolith — unused; build.py falls back to it only if src/js/ is gone
+    build.py              inlines everything into dist/index.html
+
+`build.py` concatenates the modules in the order listed in `LAYOUT` / `JS_ORDER` / `JS_FILES`
+at the top of the file and inserts each one under a banner naming its source file, so the
+built `index.html` can still be read as a whole. The modules share one function scope
+(classic scripts, not ES modules) — hence `const`/`let` are not redeclared across files.
+Load order matters: config first, main.js last.
 
 ## 1. Get the map data (once)
 Download Natural Earth **Admin 0 – Countries** as GeoJSON (110m and 50m) and put them in `data/geojson/` under these names:
@@ -34,9 +54,10 @@ Alternatively (instead of the font), put SVGs named by lower-case ISO2 code (`fr
 (e.g. from the MIT-licensed `flag-icons` package) and rebuild — they are inlined automatically.
 
 ## Where to change things
-- Regions, view boxes for "Zoom to region": `VIEWS` in `src/template.html`
-- Scoring: constants `BASE, PEN, BONUS, BTIME` (100 base, −25 per wrong try, up to +50 speed bonus fading over 10 s; skipped country = 0)
-- UI strings EN/RU: object `T`. Country names come from the browser's `Intl.DisplayNames` (offline), fallback — name from GeoJSON.
+- Regions, view boxes for "Zoom to region": `VIEWS` in `src/js/core/config.js`
+- Scoring: constants `BASE, PEN, BONUS, BTIME` (100 base, −25 per wrong try, up to +50 speed bonus fading over 10 s; skipped country = 0) — same file
+- UI strings EN/RU: object `T` in the same file. Country names come from the browser's `Intl.DisplayNames` (offline), fallback — name from GeoJSON.
+- Camera feel: `smoothF()` in `src/js/core/camera.js`
 - Micro-state fallback coordinates and filters (which Natural Earth `TYPE`s count as countries): top of `build.py`
 
 ## Decisions made on ambiguous points
@@ -52,7 +73,7 @@ Alternatively (instead of the font), put SVGs named by lower-case ISO2 code (`fr
 - Start screen is split into sections (What to play / Rules / Display & hints / Site).
 - Sub-regions: the "Sub-regions" button opens a picker with UN sub-regions (from the GeoJSON `SUBREGION` field; micro-states added by `build.py` have their own mapping in `SUB`) plus Africa north/south of the Equator (decided by the centre of each country's main landmass, so countries that straddle the equator go where most of their centre lies). They combine (union) with the selected continents. "Central Africa" is Natural Earth's "Middle Africa".
 - On Continue the camera stays where it is.
-- "Mistake popup size" (Small / Medium / Large = 17 / 24 / 32 px, default Medium): clicking an option shows a live preview. Values are in `pop()` in `src/template.html`.
+- "Mistake popup size" (Small / Medium / Large = 17 / 24 / 32 px, default Medium): clicking an option shows a live preview. Values are in `pop()` in `src/js/game/game.js`.
 - "Return camera after a correct answer" (start screen and pause menu, same setting, default off): when on, the camera flies back to the starting view of the selected region(s) after each correct answer; when off it stays where you left it.
 - "Camera smoothness" slider (0–10, default 3; start screen and pause menu share it): easing for every camera movement — wheel, drag, +/−, Reset, Zoom to region, focus on a missed country, camera return. 0 = instant, 10 = very floaty (dragging then glides after you release). Easing is frame-rate independent; formula in `smoothF()`.
 - Game time in the final stats starts at the first click on a country (thinking time before it is not counted; pauses are never counted). The speed bonus is unaffected: it still measures time from the moment each country is shown.

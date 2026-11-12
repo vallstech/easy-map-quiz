@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
-"""Build dist/index.html = src/template.html (engine) + src/skin.css + src/panel.js + Natural Earth GeoJSON maps, all inlined.
+"""Build dist/index.html = src/template.html (shell + base CSS) + src/skin.css + src/js/**.js + Natural Earth GeoJSON maps, all inlined.
 
-Usage:  python build.py                      # embeds every data/geojson/<key>.geojson (e.g. 110.geojson and 50.geojson)
-        python build.py 110=a.geojson 50=b.geojson
-The keys become the "Map detail" choices in the game (110 = low detail, 50 = high detail).
-Optional: data/fonts/*.ttf — colour flag font (inlined; first file wins).
-Optional flags: data/flags/<iso2>.svg (lower-case, e.g. ru.svg) are inlined as data URIs.
+Source layout
+    src/template.html    page shell: markup + base (engine) CSS. Placeholders:
+                           /*__DATA__*/{}  and  /*__FLAGS__*/{}  are replaced in place,
+                           /*__FONT__*/    (font-face), /*__CSS__*/ (skin) and /*__SCRIPTS__*/ (all modules) are substituted.
+    src/skin.css         the design (inlined where /*__CSS__*/ is)
+    src/js/              behaviour, one file per concern; inlined in the order of the JS list below.
+    src/panel.js         legacy monolithic build — used only if src/js/ is missing.
+    data/geojson/        ne_*_admin_0_countries prints. data/flags/*.svg. data/fonts/*.ttf.
+
+Usage
+    python build.py                                # every data/geojson/<key>.geojson (e.g. 110.geojson and 50.geojson)
+    python build.py 110=a.geojson 50=b.geojson     # or pass files explicitly (key=path)
+Keys become the "Map detail" choices in the game (110 = low detail, 50 = high detail).
 Stdlib only.
 """
 import base64, glob, json, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-S = 4  # world units per degree; must match S_ in template.html
+S = 4  # world units per degree; must match S_ in src/js/core/config.js
 CONT = {"Europe", "Asia", "Africa", "North America", "South America", "Oceania"}
 TYPES = {"Sovereign country", "Country", "Sovereignty", "Disputed"}  # skips Dependency / Lease / Indeterminate
 # Natural Earth leaves ISO_A2 = -99 for a few countries; patch by ADM0_A3.
@@ -43,6 +51,44 @@ SUB = {"VA": "Southern Europe", "SM": "Southern Europe", "AD": "Southern Europe"
        "LC": "Caribbean", "VC": "Caribbean", "GD": "Caribbean", "AG": "Caribbean", "DM": "Caribbean", "KN": "Caribbean",
        "MH": "Micronesia", "FM": "Micronesia", "PW": "Micronesia", "NR": "Micronesia", "KI": "Micronesia", "TV": "Polynesia",
        "TO": "Polynesia", "WS": "Polynesia"}
+
+# src/js/**/*.js are concatenated in this order. `None` marks the spot of a sub-directory:
+# every *.js inside it, sorted by name, is inserted there.
+LAYOUT = ["core", None, "game", None, "ui", None]
+JS_ORDER = {"core": ["config.js", "map.js", "camera.js"],
+            "game": ["game.js", "keys.js"],
+            "ui": ["screens.js", "panel.js"]}
+JS_FILES = ["main.js"]
+
+
+def js_sources():
+    """[(relative path, source)] in load order. Falls back to the legacy single file if src/js/ is gone."""
+    root = os.path.join(HERE, "src", "js")
+    if not os.path.isdir(root):
+        return [("src/panel.js", open(os.path.join(HERE, "src", "panel.js"), encoding="utf-8").read())]
+    out = []
+    for item in LAYOUT:
+        if item is None:
+            continue
+        sub = os.path.join(root, item)
+        for name in JS_ORDER.get(item, sorted(os.listdir(sub))):
+            p = os.path.join(sub, name)
+            if os.path.isfile(p):
+                out.append((os.path.relpath(p, HERE).replace("\\", "/"), open(p, encoding="utf-8").read()))
+    for name in JS_FILES:
+        p = os.path.join(root, name)
+        if os.path.isfile(p):
+            out.append((os.path.relpath(p, HERE).replace("\\", "/"), open(p, encoding="utf-8").read()))
+    return out
+
+
+def scripts():
+    """All modules as one <script> body, separated by banners naming their source file."""
+    parts = []
+    for path, src in js_sources():
+        bar = "/* " + "=" * 74 + "\n   " + path + "\n   " + "=" * 74 + " */"
+        parts.append(bar + "\n" + src.rstrip("\n"))
+    return "\n\n".join(parts) + "\n"
 
 
 def polys(g):
@@ -118,16 +164,18 @@ def main():
     for p in sorted(glob.glob(os.path.join(HERE, "data", "fonts", "*.ttf"))):
         font += "@font-face{font-family:Flags;unicode-range:U+1F1E6-1F1FF;src:url(data:font/ttf;base64," + base64.b64encode(open(p, "rb").read()).decode() + ")}"
         break
+    # The skin (src/skin.css) and every src/js/ module are kept as separate source files and inlined here -> one index.html
+    css = open(os.path.join(HERE, "src", "skin.css"), encoding="utf-8").read()
+    srcs = js_sources()
     html = html.replace("/*__FONT__*/", font)
+    html = html.replace("/*__CSS__*/", css)
+    html = html.replace("/*__SCRIPTS__*/", scripts())
     html = html.replace("/*__DATA__*/{}", json.dumps(maps, ensure_ascii=False, separators=(",", ":")))
     html = html.replace("/*__FLAGS__*/{}", json.dumps(flags, separators=(",", ":")))
-    # The skin (src/skin.css) and the Interface panel (src/panel.js) are kept as separate source files and inlined here -> one index.html
-    css = open(os.path.join(HERE, "src", "skin.css"), encoding="utf-8").read()
-    js = open(os.path.join(HERE, "src", "panel.js"), encoding="utf-8").read()
-    html = html.replace("</head>", "<style>\n" + css + "\n</style>\n</head>", 1).replace("</body>", "<script>\n" + js + "\n</script>\n</body>", 1)
     os.makedirs(os.path.join(HERE, "dist"), exist_ok=True)
     dst = os.path.join(HERE, "dist", "index.html")
-    open(dst, "w", encoding="utf-8").write(html)
+    open(dst, "w", encoding="utf-8", newline="\n").write(html)
+    print(f"js: {len(srcs)} modules, {sum(len(s) for _, s in srcs)} bytes -> {', '.join(p.rsplit('/', 1)[-1] for p, _ in srcs)}")
     print(f"{len(flags)} svg flags -> {dst} ({os.path.getsize(dst)//1024} KB)")
 
 

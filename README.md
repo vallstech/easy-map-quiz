@@ -58,6 +58,7 @@ Alternatively (instead of the font), put SVGs named by lower-case ISO2 code (`fr
 - Scoring: constants `BASE, PEN, BONUS, BTIME` (100 base, −25 per wrong try, up to +50 speed bonus fading over 10 s; skipped country = 0) — same file
 - UI strings EN/RU: object `T` in the same file. Country names come from the browser's `Intl.DisplayNames` (offline), fallback — name from GeoJSON.
 - Camera feel: `smoothF()` in `src/js/core/camera.js`
+- On-screen timer: readout and its host panel in `src/js/ui/panel.js`, placement in the `/* ---- on-screen timer ---- */` block of `src/skin.css`
 - Micro-state fallback coordinates and filters (which Natural Earth `TYPE`s count as countries): top of `build.py`
 
 ## Decisions made on ambiguous points
@@ -81,3 +82,4 @@ Alternatively (instead of the font), put SVGs named by lower-case ISO2 code (`fr
 
 - Timer: the reported game time starts at the first click and never runs while the game is paused. Setting **"Stop timer when a country is lost"** (default on; start screen and pause menu): when a country runs out of tries and the Continue / Restart panel appears, the timer stops (on) or keeps running (off). Wrong tries while tries are left never stop it.
 - On-screen timer (Interface panel → Timer): show/hide, position, size, tenths. It shows the same time as the final stats.
+- The on-screen timer lives inside the HUD panel chosen as its position — **Under score** (default), **Under task**, **Under menu** — instead of being pinned to fixed pixel coordinates, so a big Task name / Task flag size or a big UI scale can never overlap it. Hundredths show by default ("Tenths" drops to one decimal); the seconds part keeps a fixed width so the digits do not make it jump.

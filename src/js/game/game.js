@@ -208,7 +208,13 @@ function finish() {
   const rec = {regs: G.regs, score: G.score, time: used, err: G.errors, pct: Math.round(100 * G.first / tot), d: Date.now()};
   S.recent = [rec, ...S.recent].slice(0, 5);
   save();
-  const f = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') };
+  // the final stats always show thousandths, whatever the on-screen timer is set to: a result
+  // worth comparing to your own record should not depend on a display preference.
+  const f = ms => {
+    ms = Math.max(0, ms);
+    const t3 = Math.floor(ms), s = Math.floor(t3 / 1000);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.' + String(t3 % 1000).padStart(3, '0');
+  };
   $('eT').textContent = t('done') + ' — ' + regLabel(G.regs);
   $('eTab').innerHTML = [
     [t('time'), f(used)], [t('pts'), G.score], [t('err'), G.errors],

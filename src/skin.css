@@ -53,9 +53,6 @@ input{accent-color:var(--gold)}
 .fastpan.mv .c{stroke:none}
 .nodots .dot{display:none}
 .still .c.hint,.still #pop.neg{animation:none}
-/* while the camera glides, JS-driven text updates (the timer) must not compete with the
-   repaint — but hiding it reads as a bug, so it only dims */
-.mv #tmr{opacity:.6}
 
 /* ---- HUD ---- */
 #top,#zoom,#att,.dock{zoom:var(--ui)}

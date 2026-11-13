@@ -11,7 +11,7 @@ const PRESETS={cyber:CYBER,
  amber:{...CYBER,sea:'#0b0800',land:'#1d1600',landHi:'#3a2c00',line:'#0b0800',accent:'#ffb000',ok:'#7dff5a',bad:'#ff4d2e',panel:'#100c00',edge:'#2a2000',ink:'#ffd27a',mute:'#8a6a1f'},
  light:{...CYBER,sea:'#eef1f4',land:'#cdd5de',landHi:'#b3bfcc',line:'#eef1f4',accent:'#0057ff',ok:'#12a05c',bad:'#d92c3f',panel:'#ffffff',edge:'#cfd6de',ink:'#0d1117',mute:'#69758a'}};
 const DEF={...CYBER,ui:1,tn:22,tf:30,hudop:1,cw:.6,dot:1,showDots:true,shape:'auto',fastpan:false,still:false,fps:false,
- drag:8,showTimer:true,tmSize:20,tmDigits:0,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:'',autoSimplify:true};
+ drag:8,dragClick:18,showTimer:true,tmSize:20,tmDigits:0,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:'',autoSimplify:true};
 const KEY_OLD=KEY;
 let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
 /* A save written by an older build can be missing keys the panel now relies on (or hold `null`
@@ -48,14 +48,19 @@ window.draw=function(){
 const hex=s=>{s=String(s).trim();if(s[0]==='#')s=s.slice(1);if(s.length===3)s=s[0]+s[0]+s[1]+s[1]+s[2]+s[2];return[parseInt(s.slice(0,2),16)||0,parseInt(s.slice(2,4),16)||0,parseInt(s.slice(4,6),16)||0]};
 const mix=(a,b,t)=>{const A=hex(a),B2=hex(b);return'#'+A.map((v,i)=>Math.round(v+(B2[i]-v)*t).toString(16).padStart(2,'0')).join('')};
 
-/* "Simplify the camera while moving": one flag on <body> while the view is being moved. */
+/* "Simplify the camera while moving": one flag on <body> while the view is being moved.
+   With the camera locked (pause menu) nothing ever moves, so the flag must never go on:
+   otherwise the view would visibly change (borders/dots) on a wheel or a drag that is
+   supposed to do nothing at all. */
 let mvT=0;
 const mvEnd=()=>{clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),140)};
-const mv=()=>{if(!U.fastpan&&!U.autoSimplify)return;B.classList.add('mv');mvEnd()};
+const mv=()=>{if(S.set.lockCam)return;if(!U.fastpan&&!U.autoSimplify)return;B.classList.add('mv');mvEnd()};
 $('map').addEventListener('wheel',mv,{passive:true});
 $('map').addEventListener('mousemove',e=>{if(e.buttons)mv()});
 // the +/− buttons and "Reset view"/"Zoom to region" glide too: flag those as well
 ['zi','zo','zr','zg'].forEach(id=>$(id).addEventListener('click',mv));
+// switching the lock on must clear a flag that is already set
+function mvClear(){clearTimeout(mvT);B.classList.remove('mv')}
 let fpsOn=false,fe=null;
 function fpsToggle(){
  if(U.fps&&!fpsOn){fpsOn=true;fe=fe||Object.assign(document.createElement('div'),{id:'fps'});B.appendChild(fe);let n=0,t0=performance.now();
@@ -110,7 +115,8 @@ function apply(){
  const T=(c,on)=>B.classList.toggle(c,!!on);
  T('hide-score',U.hideScore);T('hide-prog',U.hideProg);T('hide-att',U.hideAtt);T('hide-zoom',U.hideZoom);T('hide-menu',U.hideMenu);T('hide-restart',U.hideRestart);
  T('task-bottom',U.taskPos==='bottom');T('zoom-right',U.zoomPos==='right');T('nodots',!U.showDots);T('still',U.still);T('fastpan',U.fastpan);T('simplify',U.autoSimplify!==false);
- DRAGT=U.drag;st.setProperty('--tms',U.tmSize+'px');tmPlace();T('tm-hide',!U.showTimer);T('shape-crisp',U.shape==='crisp');T('shape-speed',U.shape==='speed');
+ DRAGT=U.drag;DRAGT_CLICK=U.dragClick;st.setProperty('--tms',U.tmSize+'px');tmPlace();T('tm-hide',!U.showTimer);T('shape-crisp',U.shape==='crisp');T('shape-speed',U.shape==='speed');
+ if(S.set.lockCam)mvClear();
  ucss.textContent=U.css||'';fpsToggle();
  // the border width / dot size may have changed, so the cached values must go before the redraw
  lastCw=lastDr=-1;window.draw()}
@@ -118,7 +124,7 @@ function apply(){
 /* ---- the panel: schema -> controls. Labels are "EN|RU". Types: c colour, r range, s select, k checkbox, t custom css ---- */
 const SC=[['Theme|Тема',[['c','sea','Background|Фон'],['c','land','Land|Суша'],['c','landHi','Land hover|Суша при наведении'],['c','line','Borders|Границы'],['c','accent','Accent|Акцент'],['c','ok','Correct|Верно'],['c','bad','Wrong|Ошибка'],['c','panel','Panels|Панели'],['c','edge','Panel border|Рамки'],['c','ink','Text|Текст'],['c','mute','Muted text|Второстепенный текст']]],
  ['Type & shape|Шрифт и форма',[['s','font','Font|Шрифт',{mono:'Mono',sans:'Sans',cond:'Condensed',serif:'Serif'}],['r','ui','UI scale|Масштаб интерфейса',.7,1.6,.05],['r','tn','Task name size|Размер названия',12,56,1],['r','tf','Task flag size|Размер флага',14,72,1],['r','r','Corner radius|Скругление',0,20,1],['r','bw','Border width|Толщина рамок',0,4,1]]],
- ['Map|Карта',[['r','cw','Country borders|Границы стран',0,2.5,.1],['r','dot','Micro-state dots|Точки микрогосударств',.4,3,.1],['k','showDots','Show dots|Показывать точки'],['r','drag','Click tolerance (px)|Допуск клика (px)',2,24,1],['s','shape','Rendering|Отрисовка',{auto:'Auto',crisp:'Crisp edges',speed:'Speed'}]]],
+ ['Map|Карта',[['r','cw','Country borders|Границы стран',0,2.5,.1],['r','dot','Micro-state dots|Точки микрогосударств',.4,3,.1],['k','showDots','Show dots|Показывать точки'],['r','drag','Click tolerance (px)|Допуск клика (px)',2,24,1],['r','dragClick','Tolerance on a country (px)|Допуск на стране (px)',4,40,1],['s','shape','Rendering|Отрисовка',{auto:'Auto',crisp:'Crisp edges',speed:'Speed'}]]],
  ['Timer|Таймер',[['k','showTimer','Show timer|Показывать таймер'],['s','tmPos','Position|Позиция',{score:'Under score',task:'Under task',menu:'Under menu'}],['r','tmSize','Size|Размер',10,56,1],['r','tmDigits','Digits after dot|Цифр после точки',0,3,1]]],
  ['HUD|Интерфейс',[['r','hudop','HUD opacity|Прозрачность HUD',.2,1,.05],['s','taskPos','Task position|Позиция задания',{top:'Top',bottom:'Bottom'}],['s','zoomPos','Zoom buttons|Кнопки зума',{left:'Left',right:'Right'}],['k','hideScore','Hide score|Скрыть счёт'],['k','hideProg','Hide progress|Скрыть прогресс'],['k','hideAtt','Hide attempts|Скрыть попытки'],['k','hideZoom','Hide zoom buttons|Скрыть кнопки зума'],['k','hideMenu','Hide menu button|Скрыть кнопку меню'],['k','hideRestart','Hide restart button|Скрыть кнопку перезапуска']]],
  ['Performance|Производительность',[['k','autoSimplify','Simplify the camera while moving|Упрощать вид при движении'],['k','fastpan','Hide borders while moving|Скрывать границы при движении'],['k','still','Reduce motion|Меньше анимаций'],['k','fps','FPS counter|Счётчик FPS']]],

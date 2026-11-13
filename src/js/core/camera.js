@@ -7,6 +7,7 @@ const cur = {k: 1, x: 0, y: 0};
 const tgt = {k: 1, x: 0, y: 0};
 let K0 = 1;                 // world-fit scale: the zoom-out limit is K0 * 0.9
 let DRAGT = 8;              // px the mouse must travel before a press becomes a camera drag (Interface panel)
+let DRAGT_CLICK = 18;       // stricter limit when the press started on a country: protects the answer
 
 const box = () => $('map').getBoundingClientRect();
 
@@ -24,14 +25,19 @@ function viewOf(v) {
 }
 
 function go(v, instant) {
-  if (S.set.lockCam && !instant) return;   // camera lock: only game start / resize may place the view
+  if (S.set.lockCam && !instant) return;   // locked: only game start / resize may place the view
   Object.assign(tgt, v);
-  if (instant) Object.assign(cur, v);
+  if (instant || S.set.lockCam) Object.assign(cur, v);
+  last = 0;
   raf();
 }
 
 let anim = 0, last = 0;
-function raf() { if (!anim) anim = requestAnimationFrame(step) }
+function raf() {
+  // with the camera locked there is nothing to animate: land on the target at once
+  if (S.set.lockCam) { Object.assign(cur, tgt); last = 0; draw(); return }
+  if (!anim) anim = requestAnimationFrame(step);
+}
 
 /* Camera easing used by EVERYTHING that moves the view (wheel, drag, +/−, reset,
    zoom to region, focus on a missed country, camera return): each frame the view
@@ -41,6 +47,9 @@ const smoothF = () => { const v = S.set.smooth; return v === 0 ? 1 : Math.max(.0
 
 function step(ts) {
   anim = 0;
+  // Camera lock: nothing may move the view. Snap to the target and stop the loop, so no
+  // easing frames keep running (and no *.mv view simplification is left switched on).
+  if (S.set.lockCam) { Object.assign(cur, tgt); last = 0; draw(); return }
   const f = smoothF(), dt = last ? Math.min(ts - last, 50) / 16.667 : 1;
   const al = f >= 1 ? 1 : 1 - Math.pow(1 - f, dt);
   last = ts;
@@ -78,29 +87,33 @@ const M = $('map');
 let drag = null, dragged = false, downId = null;
 
 M.addEventListener('wheel', e => {
+  if (S.set.lockCam) return;                        // locked: swallow the wheel entirely, no view change
   e.preventDefault();
-  if (S.set.lockCam) return;
   const b = box();
   zoomAt(Math.exp(-e.deltaY * .0016), e.clientX - b.left, e.clientY - b.top);
 }, {passive: false});
 
 M.addEventListener('mousedown', e => {
   if (e.button !== 0) return;
-  drag = {x: e.clientX, y: e.clientY, tx: tgt.x, ty: tgt.y};
-  dragged = false;
   downId = (e.target.dataset && e.target.dataset.id) || null;
+  // with the camera locked a press can only be a click: no pan state is even created
+  drag = S.set.lockCam ? null : {x: e.clientX, y: e.clientY, tx: tgt.x, ty: tgt.y, onCountry: !!downId};
+  dragged = false;
 });
 
 addEventListener('mousemove', e => {
   if (!drag) return;
+  if (S.set.lockCam) return;                        // locked: a press never becomes a pan
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (!dragged) {
-    // below the click tolerance the camera does NOT move at all
-    if (Math.hypot(dx, dy) <= DRAGT) return;
+    // Below the threshold the camera does NOT move at all (the press still counts as a click).
+    // A press that STARTED ON A COUNTRY gets the stricter limit: the player is aiming at that
+    // country, and a 2-pixel hand tremor must never turn their answer into a camera pan.
+    const lim = drag.onCountry ? Math.max(DRAGT, DRAGT_CLICK) : DRAGT;
+    if (Math.hypot(dx, dy) <= lim) return;
     dragged = true;
-    if (!S.set.lockCam) M.classList.add('drag');
+    M.classList.add('drag');
   }
-  if (S.set.lockCam) return;
   // the view follows the target with the same easing (glides a bit after release)
   tgt.x = drag.tx + dx;
   tgt.y = drag.ty + dy;
@@ -110,7 +123,9 @@ addEventListener('mousemove', e => {
 /* A country is picked on mouse UP, for the country under the spot where the press
    STARTED, so a little hand jitter or sliding over a border can't lose the click. */
 addEventListener('mouseup', e => {
-  if (drag && e.button === 0 && !dragged && downId) onClick(downId, e);
+  // a click is a press that never became a pan — with the camera locked `drag` was never
+  // created, which is exactly "never became a pan", so the country under the press still counts
+  if (e.button === 0 && !dragged && downId) onClick(downId, e);
   drag = null; dragged = false; downId = null;
   M.classList.remove('drag');
 });

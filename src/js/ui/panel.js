@@ -13,7 +13,14 @@ const PRESETS={cyber:CYBER,
 const DEF={...CYBER,ui:1,tn:22,tf:30,hudop:1,cw:.6,dot:1,showDots:true,shape:'auto',fastpan:false,still:false,fps:false,
  drag:8,showTimer:true,tmSize:20,tmDigits:0,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:'',autoSimplify:true};
 const KEY_OLD=KEY;
-let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY_OLD)||'{}'))}catch(e){}
+let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
+/* A save written by an older build can be missing keys the panel now relies on (or hold `null`
+   for them), and Object.assign would let that through — a missing showTimer hides the timer and
+   a missing autoSimplify silently disables the camera optimisation. Normalise every known key
+   against DEF; unknown keys carry over untouched. */
+for(const k in DEF)if(U[k]===undefined||U[k]===null)U[k]=DEF[k];
+U.showTimer=U.showTimer!==false;
+U.autoSimplify=U.autoSimplify!==false;
 /* migrate the old "Tenths"/"Hundredths" checkboxes -> digits after the dot (0 by default) */
 if(typeof U.tmDigits!=='number')U.tmDigits=U.tmHundredths?2:U.tmTenths?1:0;
 delete U.tmTenths;delete U.tmHundredths;
@@ -25,11 +32,15 @@ const gw=$('w'),gd=$('dots');
 /* Border width. The stylesheet used vector-effect:non-scaling-stroke, which forces the browser to
    re-derive the stroke of every segment on EVERY scale change — 91 763 segments on the 50m map,
    which is why zooming crawled. Instead the width is divided by the scale here once per frame:
-   one attribute write, and the renderer just scales an already-built shape. */
+   one attribute write, and the renderer just scales an already-built shape.
+   Both writes are skipped when nothing changed: a transform attribute written with a new string
+   every frame invalidates the whole map layer even when the camera is standing still. */
+let lastTf='',lastCw=-1,lastDr=-1;
 window.draw=function(){
- gw.setAttribute('transform','translate('+cur.x+' '+cur.y+') scale('+cur.k+')');
- gw.style.setProperty('--cwf',(U.cw/cur.k)+'px');
- gd.style.setProperty('--dr',(5*U.dot/cur.k)+'px')};
+ const tf='translate('+cur.x+' '+cur.y+') scale('+cur.k+')';
+ if(tf!==lastTf){lastTf=tf;gw.setAttribute('transform',tf)}
+ const cw=U.cw/cur.k;if(cw!==lastCw){lastCw=cw;gw.style.setProperty('--cwf',cw+'px')}
+ const dr=5*U.dot/cur.k;if(dr!==lastDr){lastDr=dr;gd.style.setProperty('--dr',dr+'px')}};
 
 /* ---- pre-blended colours: the stylesheet used to call color-mix() for every country element,
    which meant re-computing the colour of hundreds of paths on every style pass. Mixing two hex
@@ -62,24 +73,29 @@ tmM.className='h';tmF.className='f';
 B.appendChild(tm);
 function tmHost(){const id=U.tmPos==='task'?['task','score']:U.tmPos==='menu'?['menu','score']:['score','task'];
  for(const h of id){const el=$(h);if(el)return el}return null}
+/* #score and #task are columns, so appending the timer puts it UNDER their content (the score /
+   the flag+name) instead of beside it. #menu is a row, so there it goes after the buttons. */
 function tmPlace(){const h=tmHost();if(!h||tm.parentNode===h)return;
- // #score is a column: the timer is a ROW UNDER the score. Elsewhere it is appended after the content.
- if(h.id==='score')h.appendChild(tm);else{h.appendChild(tm)}}
+ if(h.id==='menu')h.appendChild(tm);else h.appendChild(tm)}
 tmPlace();
+/* the timer must also survive a HUD that is hidden or repositioned */
+if(!$('score').contains(tm)&&!$('task').contains(tm)&&!$('menu').contains(tm))tmPlace();
 let tmTxt='',tmTxtF='';
-setInterval(()=>{if(!U.showTimer)return;
+/* one shared readout routine, called by the tick AND once at start-up, so the timer shows 0:00
+   immediately instead of staying blank until the first timer event fires */
+function tmTick(){if(!U.showTimer)return;
  let v;
  if(!G)v=0;                                        // before the first game / before the first click: 0:00
  else{v=G.t0===undefined?(G.fin?G.t:gt()):G.t0===null?0:(G.fin?G.t:gt())-G.t0;v=Math.max(0,v)}
  const s=Math.floor(v/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
  const a=(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(ss).padStart(2,'0');
  // digits after the dot = the slider value (0 = plain time, no dot at all)
- const n=U.tmDigits||0,b=String(Math.floor(v%1000/Math.pow(10,3-n))||0).padStart(n,'0');
+ const n=U.tmDigits||0,b=n?String(Math.floor(v%1000/Math.pow(10,3-n))||0).padStart(n,'0'):'';
  const f=n?'.'+b:'';
  if(a!==tmTxt){tmTxt=a;tmM.textContent=a}
- if(f!==tmTxtF){tmTxtF=f;tmF.textContent=f}
- // nothing to show before the first country is found: keep the space, but dim it out
- B.classList.toggle('tm-idle',!G)},100);
+ if(f!==tmTxtF){tmTxtF=f;tmF.textContent=f}}
+tmTick();
+setInterval(tmTick,100);
 /* ---- apply settings ---- */
 const ucss=document.head.appendChild(Object.assign(document.createElement('style'),{id:'ucss'}));
 function apply(){
@@ -95,7 +111,9 @@ function apply(){
  T('hide-score',U.hideScore);T('hide-prog',U.hideProg);T('hide-att',U.hideAtt);T('hide-zoom',U.hideZoom);T('hide-menu',U.hideMenu);T('hide-restart',U.hideRestart);
  T('task-bottom',U.taskPos==='bottom');T('zoom-right',U.zoomPos==='right');T('nodots',!U.showDots);T('still',U.still);T('fastpan',U.fastpan);T('simplify',U.autoSimplify!==false);
  DRAGT=U.drag;st.setProperty('--tms',U.tmSize+'px');tmPlace();T('tm-hide',!U.showTimer);T('shape-crisp',U.shape==='crisp');T('shape-speed',U.shape==='speed');
- ucss.textContent=U.css||'';fpsToggle();window.draw()}
+ ucss.textContent=U.css||'';fpsToggle();
+ // the border width / dot size may have changed, so the cached values must go before the redraw
+ lastCw=lastDr=-1;window.draw()}
 
 /* ---- the panel: schema -> controls. Labels are "EN|RU". Types: c colour, r range, s select, k checkbox, t custom css ---- */
 const SC=[['Theme|Тема',[['c','sea','Background|Фон'],['c','land','Land|Суша'],['c','landHi','Land hover|Суша при наведении'],['c','line','Borders|Границы'],['c','accent','Accent|Акцент'],['c','ok','Correct|Верно'],['c','bad','Wrong|Ошибка'],['c','panel','Panels|Панели'],['c','edge','Panel border|Рамки'],['c','ink','Text|Текст'],['c','mute','Muted text|Второстепенный текст']]],

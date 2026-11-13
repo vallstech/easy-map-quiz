@@ -82,7 +82,9 @@ const id_done = id => G.done[id] !== undefined;
 
 function render() {
   const id = cid(), sh = G.show;
-  $('task').innerHTML = (sh !== 'name' ? flag(id) : '') + (sh !== 'flag' ? `<span class="nm">${nm(id)}</span>` : '');
+  // #taskBody, not #task: the on-screen timer may live inside #task (position "Under task") and
+  // writing #task.innerHTML would delete it on every question.
+  $('taskBody').innerHTML = (sh !== 'name' ? flag(id) : '') + (sh !== 'flag' ? `<span class="nm">${nm(id)}</span>` : '');
   $('sc').textContent = G.score;
   $('prog').textContent = G.i + ' / ' + G.order.length;
   const inf = !G.n, v = G.mode === 'per' ? G.left : G.pool;

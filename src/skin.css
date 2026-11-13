@@ -37,32 +37,44 @@ input{accent-color:var(--gold)}
 .dot[data-s=off]{fill:var(--edge)}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:var(--skip-dot)}
 .dot.okf{fill:var(--ok)}.dot.bad,.dot.hint{fill:var(--bad)}
 .shape-crisp .c{shape-rendering:crispEdges}.shape-speed .c{shape-rendering:optimizeSpeed}
-/* While the camera is moving the SVG is re-rasterised every frame; dropping the strokes (and,
-   with the slower maps, the thin borders entirely) is what keeps the zoom smooth. */
+/* While the camera is moving the SVG is re-rasterised every frame. The borders MUST stay visible
+   and clean (optimizeSpeed would turn them into staircases, which reads as "no borders"), so the
+   saving comes from what is expensive and invisible at speed:
+   - miter joins become bevel joins (cheap on dense coastlines),
+   - fill/stroke transitions and the hover rule are switched off,
+   - the micro-state dot rings are dropped (1px outlines nobody reads while moving).
+   The real win is the pre-divided stroke width (see draw()): the browser scales an already-built
+   shape instead of re-deriving every stroke of all ~92 000 segments. */
+.mv .c{stroke-linejoin:bevel;transition:none}
+.mv .dot{transition:none;stroke:none}
+.mv .c[data-s=on]:hover{fill:var(--land)}
+
+/* "Hide borders while moving" stays available for anyone who would rather have the FPS */
 .fastpan.mv .c{stroke:none}
-/* "Simplify the camera while moving" (on by default): no borders, no land fills redraw and no
-   hover/transition work during a wheel/drag, then one clean repaint when it stops. */
-.simplify.mv .c{stroke:none;transition:none}
-.simplify.mv .dot{stroke:none}
-.simplify.mv .c[data-s=on]:hover{fill:var(--land)}
 .nodots .dot{display:none}
 .still .c.hint,.still #pop.neg{animation:none}
-/* while the camera glides, the browser repaints at priority: JS-driven text updates (the timer)
-   must not compete with it */
-.mv #tmr{visibility:hidden}
+/* while the camera glides, JS-driven text updates (the timer) must not compete with the
+   repaint — but hiding it reads as a bug, so it only dims */
+.mv #tmr{opacity:.6}
 
 /* ---- HUD ---- */
 #top,#zoom,#att,.dock{zoom:var(--ui)}
 #top,#zoom,#att{opacity:var(--hudop)}
-#task{background:transparent;border:none;border-left:3px solid var(--gold);padding:4px 14px;min-width:0;justify-content:flex-start;flex-wrap:wrap;row-gap:2px}
+/* #task is a column: the flag and the name are the first row (@row span) and the timer, when its
+   position is "Under task", becomes the second row — instead of being laid out beside them. */
+/* #task and #score are COLUMNS, so the timer (moved in by ui/panel.js) stacks UNDER the task /
+   the score instead of being laid out beside them. The flag+name live in #taskBody, so the game
+   can repaint them without touching the timer. */
+#task{background:transparent;border:none;border-left:3px solid var(--gold);padding:4px 14px;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+#taskBody{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 #task .nm{font:700 var(--tn)/1 var(--font);text-transform:uppercase;letter-spacing:.08em}
 .fl{height:var(--tf);border-radius:0}.fe{font-size:var(--tf)}
 #score{background:transparent;border:none;padding:0 4px;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 #score b{font:700 24px/1.1 var(--font);color:var(--gold);font-variant-numeric:tabular-nums}
 #score small{font-size:10px;text-transform:uppercase;letter-spacing:.14em}
 #menu{gap:8px;padding:5px 8px}
-#menu #tmr,#task #tmr{margin-left:12px}
-#task #tmr{align-self:center}
+#menu #tmr{margin-left:12px}
+#task #tmr{margin-top:1px}
 .task-bottom #menu{position:fixed;left:12px;bottom:14px}
 #att{background:transparent;border:none;padding:0}.pip{border-radius:0;width:20px;height:4px}.pip.x{background:var(--edge)}
 #att .mute{display:none}

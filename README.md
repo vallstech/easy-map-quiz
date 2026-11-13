@@ -41,7 +41,18 @@ In the game, **Map detail** on the start screen switches between the embedded ma
 
 ## Interface panel (button `UI` bottom-right, or F2; Esc closes)
 Colours (11 variables), 4 presets (Cyber / Stealth / Amber / Light), font, UI scale, task name/flag size, corner radius, border width, map borders, micro-state dot size/visibility, click tolerance, rendering mode, HUD opacity, task and zoom-button position, show/hide of score / progress / attempts / zoom / menu / restart, free-form **Custom CSS**, Reset, JSON Export/Import. Saved in `localStorage` (`mapquiz.exp.ui.v1`).
-Performance: no shadows, no per-path transitions, micro-state dot radius is one CSS variable per frame; optional "Hide borders while moving", "Reduce motion", "Crisp edges / Speed" rendering and an FPS counter.
+Performance
+- no shadows, no per-path transitions, micro-state dot radius is one CSS variable per frame
+- **no `vector-effect:non-scaling-stroke`** on the country paths (it would make the browser re-derive
+  the stroke of all ~92 000 segments of the 50m map on every scale change): the border width is
+  divided by the camera scale in `draw()` and set as one CSS variable instead
+- **no `will-change:transform`** on `#w` (it promotes the whole map to a composited layer that has to
+  be re-rasterised on every zoom); `#map` uses `contain:strict`
+- derived colours (darkened land, skipped-country tints, the screen backdrop) are pre-blended in JS
+  on a settings change rather than left to `color-mix()` per element
+- optional **"Simplify the camera while moving"** (on by default): no strokes, transitions or hover
+  work while the view moves, one clean repaint when it settles
+- optional "Hide borders while moving", "Reduce motion", "Crisp edges / Speed" rendering and an FPS counter
 
 ## Clicks and camera
 - A press only becomes a camera drag after the mouse travels more than the *click tolerance* (default 8 px, Interface panel); below that the camera does not move and the click counts. The country is the one under the spot where the press started, and it is picked on mouse-up, so sliding a few pixels over a border does not lose the click.
@@ -81,5 +92,5 @@ Alternatively (instead of the font), put SVGs named by lower-case ISO2 code (`fr
 - Restart: a "Restart (R)" button next to Menu during the game, and a configurable key (default R). Rebind it in the "Controls" section of the start screen or in the pause menu: click the key button, press the new key (Esc cancels, modifiers alone are ignored). Stored by physical key (`KeyboardEvent.code`), so it works on any keyboard layout. Ctrl/Alt/Cmd combos and typing in input fields do not trigger it. Restart uses the same regions and settings.
 
 - Timer: the reported game time starts at the first click and never runs while the game is paused. Setting **"Stop timer when a country is lost"** (default on; start screen and pause menu): when a country runs out of tries and the Continue / Restart panel appears, the timer stops (on) or keeps running (off). Wrong tries while tries are left never stop it.
-- On-screen timer (Interface panel → Timer): show/hide, position, size, tenths. It shows the same time as the final stats.
-- The on-screen timer lives inside the HUD panel chosen as its position — **Under score** (default), **Under task**, **Under menu** — instead of being pinned to fixed pixel coordinates, so a big Task name / Task flag size or a big UI scale can never overlap it. Hundredths show by default ("Tenths" drops to one decimal); the seconds part keeps a fixed width so the digits do not make it jump.
+- On-screen timer (Interface panel → Timer): show/hide, position, size, **digits after the dot** (0–3, default 0 = no fractions). It shows the same time as the final stats.
+- The on-screen timer lives inside the HUD panel chosen as its position — **Under score** (default), **Under task**, **Under menu** — instead of being pinned to fixed pixel coordinates, so a big Task name / Task flag size or a big UI scale can never overlap it. Under the score it stacks as a row under it (`#score` is a column). The whole-number part keeps a fixed width so the digits do not make it jump.

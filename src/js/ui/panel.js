@@ -45,14 +45,10 @@ $('map').addEventListener('wheel',mv,{passive:true});
 $('map').addEventListener('mousemove',e=>{if(e.buttons)mv()});
 // the +/− buttons and "Reset view"/"Zoom to region" glide too: flag those as well
 ['zi','zo','zr','zg'].forEach(id=>$(id).addEventListener('click',mv));
-let mvT=0;
-const mvEnd=()=>{clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),140)};
-const mv=()=>{if(!U.fastpan&&!U.autoSimplify)return;B.classList.add('mv');mvEnd()};
-// a frame counter for the FPS readout; also the moment the camera settles
-let fpsOn=false,fe=null,frames=0;
+let fpsOn=false,fe=null;
 function fpsToggle(){
  if(U.fps&&!fpsOn){fpsOn=true;fe=fe||Object.assign(document.createElement('div'),{id:'fps'});B.appendChild(fe);let n=0,t0=performance.now();
-  (function f(t){if(!fpsOn)return;n++;frames++;if(t-t0>=500){fe.textContent=Math.round(n*1000/(t-t0))+' FPS';n=0;t0=t}requestAnimationFrame(f)})(t0)}
+  (function f(t){if(!fpsOn)return;n++;if(t-t0>=500){fe.textContent=Math.round(n*1000/(t-t0))+' FPS';n=0;t0=t}requestAnimationFrame(f)})(t0)}
  else if(!U.fps&&fpsOn){fpsOn=false;if(fe)fe.remove()}}
 
 /* ---- on-screen timer: the same clock as the final stats (starts at the first click, pauses excluded).

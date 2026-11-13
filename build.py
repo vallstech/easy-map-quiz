@@ -177,6 +177,12 @@ def main():
     open(dst, "w", encoding="utf-8", newline="\n").write(html)
     print(f"js: {len(srcs)} modules, {sum(len(s) for _, s in srcs)} bytes -> {', '.join(p.rsplit('/', 1)[-1] for p, _ in srcs)}")
     print(f"{len(flags)} svg flags -> {dst} ({os.path.getsize(dst)//1024} KB)")
+    # sanity checks: a duplicated top-level declaration in the concatenated bundle is a
+    # SyntaxError that makes the whole appended module silently never run.
+    import subprocess
+    rc = subprocess.call([sys.executable, os.path.join(HERE, "check.py")])
+    if rc:
+        sys.exit("check.py failed - the bundle is NOT safe to run")
 
 
 if __name__ == "__main__":

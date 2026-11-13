@@ -17,11 +17,11 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--sea);color:var(--ink);font:15px/1.4 system-ui,"Segoe UI",sans-serif;overflow:hidden}
 #map{position:absolute;inset:0;cursor:grab}#map.drag,#map.drag *{cursor:grabbing!important}
 .c[data-s=on],.hit:not([data-s=off]){cursor:pointer}svg{width:100%;height:100%;display:block}
-.c{fill:var(--land);transition:fill .3s;stroke:var(--line);stroke-width:.7;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.c{fill:var(--land);transition:fill .3s;stroke:var(--line);stroke-width:.7;stroke-linejoin:round}
 .c[data-s=off]{fill:#1c2835}.c[data-s=on]:hover{fill:var(--land-hi)}.c[data-s=ok]{fill:var(--ok)}.c[data-s=skip]{fill:#7a4b4b}
 .c.bad,.c.hint{fill:var(--bad)!important}.c.hint{animation:p .7s infinite alternate}.c.okf{fill:var(--ok)!important}.c.okf,.c.skf,.dot.okf,.dot.skf{transition:none}.c.fo,.dot.fo{transition:fill 1s}.c.skf{fill:#a06666!important}
 @keyframes p{to{opacity:.55}}
-.dot{transition:fill .3s;fill:#9fb4c8;stroke:var(--sea);stroke-width:1;vector-effect:non-scaling-stroke;pointer-events:none}
+.dot{transition:fill .3s;fill:#9fb4c8;stroke:var(--sea);stroke-width:1;pointer-events:none}
 .dot[data-s=off]{fill:#33465a}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:#a06666}.dot.bad,.dot.hint{fill:var(--bad)}.dot.okf{fill:var(--ok)}.dot.skf{fill:#a06666}
 .hit{fill:transparent;cursor:pointer}.hit[data-s=off]{pointer-events:none}
 .bar{position:absolute;z-index:5;display:flex;gap:8px;align-items:center}
@@ -58,6 +58,10 @@ table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px sol
    Everything is driven by CSS variables that the Interface panel (panel.js, button "UI" or F2) sets. */
 :root{--sea:#06080b;--land:#161c24;--land-hi:#27323f;--line:#06080b;--ok:#19e68c;--bad:#ff3b4e;--gold:#00e0ff;--ink:#e6edf3;--mute:#6b7a8a;--panel:#0b0f14;--edge:#1d2631;
  --font:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;--r:0px;--bw:1px;--ui:1;--tn:22px;--tf:30px;--hudop:1;--cw:.6}
+/* Pre-blended colours. These used to be color-mix(in srgb, …) per element: on a 200-country map
+   that means hundreds of colour computations to redo whenever the variable changes. The panel
+   recomputes them with plain JS (mix() in ui/panel.js) and writes them here instead. */
+:root{--land-off:#10161d;--skip:#3f3438;--skip-dot:#7b5a5a;--sea-94:#06080bf0}
 html,body{background:var(--sea);color:var(--ink);font:13px/1.35 var(--font);letter-spacing:.02em}
 button,input,select,textarea{font-family:var(--font)}
 *{box-shadow:none!important}                      /* perf: no shadows anywhere */
@@ -71,24 +75,37 @@ button:disabled{opacity:.35}
 input{accent-color:var(--gold)}
 .mute,#score small{color:var(--mute)}
 
-/* ---- map ---- */
-#map{contain:layout paint}
-#w{will-change:transform}
-.c{fill:var(--land);stroke:var(--line);stroke-width:var(--cw);transition:none}   /* perf: no per-path transitions */
-.c[data-s=off]{fill:color-mix(in srgb,var(--land) 50%,var(--sea))}
+/* ---- map ----
+   Performance notes (the map is thousands of <path> nodes; every extra paint pass shows):
+   NO will-change:transform on #w — it would promote the whole map to one composited layer that
+   has to be RE-RASTERISED on every scale change, which is exactly what made zooming crawl.
+   Left as a plain SVG transform the browser can keep the existing rasterisation. */
+#map{contain:strict}
+.c{fill:var(--land);stroke:var(--line);stroke-width:var(--cwf,var(--cw));transition:none;stroke-linejoin:round}   /* perf: no per-path transitions; stroke width is pre-divided by the camera scale in draw() */
+.c[data-s=off]{fill:var(--land-off)}
 .c[data-s=on]:hover{fill:var(--land-hi)}
 .c[data-s=ok]{fill:var(--ok)}
-.c[data-s=skip]{fill:color-mix(in srgb,var(--bad) 40%,var(--land))}
+.c[data-s=skip]{fill:var(--skip)}
 .c.fo,.dot.fo{transition:fill 1s}                 /* the green fade-out of Hard mode stays */
 .c.okf{fill:var(--ok)!important}.c.bad,.c.hint{fill:var(--bad)!important}
-.dot{r:var(--dr,5px);transition:none;fill:var(--mute);stroke:var(--sea)}   /* radius = ONE css variable written per frame instead of N attributes */
+.dot{r:var(--dr,5px);transition:none;fill:var(--mute);stroke:var(--sea);stroke-width:calc(var(--cwf,0.6px)*2)}   /* radius = ONE css variable written per frame instead of N attributes */
 .hit{r:calc(var(--dr,5px)*2.4)}
-.dot[data-s=off]{fill:var(--edge)}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:color-mix(in srgb,var(--bad) 60%,var(--mute))}
+.dot[data-s=off]{fill:var(--edge)}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:var(--skip-dot)}
 .dot.okf{fill:var(--ok)}.dot.bad,.dot.hint{fill:var(--bad)}
 .shape-crisp .c{shape-rendering:crispEdges}.shape-speed .c{shape-rendering:optimizeSpeed}
-.fastpan.mv .c{stroke:none}                       /* optional: borders off while moving (big FPS gain on the 50m map) */
+/* While the camera is moving the SVG is re-rasterised every frame; dropping the strokes (and,
+   with the slower maps, the thin borders entirely) is what keeps the zoom smooth. */
+.fastpan.mv .c{stroke:none}
+/* "Simplify the camera while moving" (on by default): no borders, no land fills redraw and no
+   hover/transition work during a wheel/drag, then one clean repaint when it stops. */
+.simplify.mv .c{stroke:none;transition:none}
+.simplify.mv .dot{stroke:none}
+.simplify.mv .c[data-s=on]:hover{fill:var(--land)}
 .nodots .dot{display:none}
 .still .c.hint,.still #pop.neg{animation:none}
+/* while the camera glides, the browser repaints at priority: JS-driven text updates (the timer)
+   must not compete with it */
+.mv #tmr{visibility:hidden}
 
 /* ---- HUD ---- */
 #top,#zoom,#att,.dock{zoom:var(--ui)}
@@ -96,14 +113,13 @@ input{accent-color:var(--gold)}
 #task{background:transparent;border:none;border-left:3px solid var(--gold);padding:4px 14px;min-width:0;justify-content:flex-start;flex-wrap:wrap;row-gap:2px}
 #task .nm{font:700 var(--tn)/1 var(--font);text-transform:uppercase;letter-spacing:.08em}
 .fl{height:var(--tf);border-radius:0}.fe{font-size:var(--tf)}
-#score{background:transparent;border:none;padding:0 4px;text-align:right}
+#score{background:transparent;border:none;padding:0 4px;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 #score b{font:700 24px/1.1 var(--font);color:var(--gold);font-variant-numeric:tabular-nums}
 #score small{font-size:10px;text-transform:uppercase;letter-spacing:.14em}
-#score #tmr{margin-top:2px}
 #menu{gap:8px;padding:5px 8px}
 #menu #tmr,#task #tmr{margin-left:12px}
+#task #tmr{align-self:center}
 .task-bottom #menu{position:fixed;left:12px;bottom:14px}
-#score #tmr{margin-top:2px}
 #att{background:transparent;border:none;padding:0}.pip{border-radius:0;width:20px;height:4px}.pip.x{background:var(--edge)}
 #att .mute{display:none}
 #zoom{gap:4px}#zoom button{padding:6px 10px}
@@ -112,7 +128,7 @@ input{accent-color:var(--gold)}
 #pop.neg{border-radius:var(--r);border-width:2px;text-transform:uppercase;letter-spacing:.04em}
 
 /* ---- start / pause / end screens ---- */
-.scr{background:color-mix(in srgb,var(--sea) 94%,transparent)}
+.scr{background:var(--sea-94)}
 .box h1{font:700 16px var(--font);letter-spacing:.22em;text-transform:uppercase}
 #tSub{display:none}
 .sec{margin-top:12px;padding-top:8px;border-top:var(--bw) solid var(--edge)}
@@ -146,15 +162,16 @@ body.camlock #map{cursor:default}.camlock #zoom button{opacity:.35}   /* camera 
 #fps{position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:70;font:11px var(--font);color:var(--ok);pointer-events:none}
 
 /* ---- on-screen timer ----
-   Lives INSIDE the HUD panel it belongs to (created by ui/panel.js), so it can never
-   overlap the task name/flag however big those are: the panels are flex items of the
-   top bar / the zoom column and the timer is one more row inside them. ---- */
+   It lives INSIDE the HUD panel chosen as its position, as a row UNDER that panel's own content
+   (#score is a column, so the timer stacks under the score) — never at fixed coordinates, so a
+   big task name, a big flag or a big UI scale cannot overlap it.
+   Only two spans are ever touched; the text is rewritten only when a digit actually changes,
+   because a full innerHTML rebuild 10–20 times a second forces a style/layout pass over the
+   whole page (thousands of SVG nodes) on every tick. ---- */
 #tmr{font:700 var(--tms,20px)/1.15 var(--font);font-variant-numeric:tabular-nums;color:var(--ink);pointer-events:none;white-space:nowrap}
-/* the seconds part keeps a fixed width, so the running hundredths do not make it jump */
+/* the whole-number part keeps a fixed width, so a growing timer does not shift the layout */
 #tmr .h{display:inline-block;min-width:3.2ch;text-align:right}
-#tmr .f{opacity:.75}
-/* Position = which panel hosts the timer: Under score (default), Under task, Under menu.
-   The timer is moved between the hosts by ui/panel.js. */
+#tmr .f{opacity:.8}
 .tm-hide #tmr{display:none}
 
 </style></head><body>
@@ -979,45 +996,93 @@ const PRESETS={cyber:CYBER,
  amber:{...CYBER,sea:'#0b0800',land:'#1d1600',landHi:'#3a2c00',line:'#0b0800',accent:'#ffb000',ok:'#7dff5a',bad:'#ff4d2e',panel:'#100c00',edge:'#2a2000',ink:'#ffd27a',mute:'#8a6a1f'},
  light:{...CYBER,sea:'#eef1f4',land:'#cdd5de',landHi:'#b3bfcc',line:'#eef1f4',accent:'#0057ff',ok:'#12a05c',bad:'#d92c3f',panel:'#ffffff',edge:'#cfd6de',ink:'#0d1117',mute:'#69758a'}};
 const DEF={...CYBER,ui:1,tn:22,tf:30,hudop:1,cw:.6,dot:1,showDots:true,shape:'auto',fastpan:false,still:false,fps:false,
- drag:8,showTimer:true,tmSize:20,tmTenths:false,tmHundredths:true,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:''};
-let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
+ drag:8,showTimer:true,tmSize:20,tmDigits:0,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:'',autoSimplify:true};
+const KEY_OLD=KEY;
+let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY_OLD)||'{}'))}catch(e){}
+/* migrate the old "Tenths"/"Hundredths" checkboxes -> digits after the dot (0 by default) */
+if(typeof U.tmDigits!=='number')U.tmDigits=U.tmHundredths?2:U.tmTenths?1:0;
+delete U.tmTenths;delete U.tmHundredths;
+U.tmDigits=Math.min(3,Math.max(0,Math.round(U.tmDigits)||0));
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(U))}catch(e){}};
 
 /* ---- performance: micro-state dot radius is ONE css variable per frame (engine wrote r on every dot every frame) ---- */
 const gw=$('w'),gd=$('dots');
-window.draw=function(){gw.setAttribute('transform','translate('+cur.x+' '+cur.y+') scale('+cur.k+')');gd.style.setProperty('--dr',(5*U.dot/cur.k)+'px')};
-let mvT=0;const mv=()=>{if(!U.fastpan)return;B.classList.add('mv');clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),180)};
-$('map').addEventListener('wheel',mv,{passive:true});$('map').addEventListener('mousemove',e=>{if(e.buttons)mv()});
-let fpsOn=false,fe=null;
+/* Border width. The stylesheet used vector-effect:non-scaling-stroke, which forces the browser to
+   re-derive the stroke of every segment on EVERY scale change — 91 763 segments on the 50m map,
+   which is why zooming crawled. Instead the width is divided by the scale here once per frame:
+   one attribute write, and the renderer just scales an already-built shape. */
+window.draw=function(){
+ gw.setAttribute('transform','translate('+cur.x+' '+cur.y+') scale('+cur.k+')');
+ gw.style.setProperty('--cwf',(U.cw/cur.k)+'px');
+ gd.style.setProperty('--dr',(5*U.dot/cur.k)+'px')};
+
+/* ---- pre-blended colours: the stylesheet used to call color-mix() for every country element,
+   which meant re-computing the colour of hundreds of paths on every style pass. Mixing two hex
+   colours in JS once per setting change is free by comparison. ---- */
+const hex=s=>{s=String(s).trim();if(s[0]==='#')s=s.slice(1);if(s.length===3)s=s[0]+s[0]+s[1]+s[1]+s[2]+s[2];return[parseInt(s.slice(0,2),16)||0,parseInt(s.slice(2,4),16)||0,parseInt(s.slice(4,6),16)||0]};
+const mix=(a,b,t)=>{const A=hex(a),B2=hex(b);return'#'+A.map((v,i)=>Math.round(v+(B2[i]-v)*t).toString(16).padStart(2,'0')).join('')};
+
+/* "Simplify the camera while moving": one flag on <body> while the view is being moved. */
+let mvT=0;
+const mvEnd=()=>{clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),140)};
+const mv=()=>{if(!U.fastpan&&!U.autoSimplify)return;B.classList.add('mv');mvEnd()};
+$('map').addEventListener('wheel',mv,{passive:true});
+$('map').addEventListener('mousemove',e=>{if(e.buttons)mv()});
+// the +/− buttons and "Reset view"/"Zoom to region" glide too: flag those as well
+['zi','zo','zr','zg'].forEach(id=>$(id).addEventListener('click',mv));
+let mvT=0;
+const mvEnd=()=>{clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),140)};
+const mv=()=>{if(!U.fastpan&&!U.autoSimplify)return;B.classList.add('mv');mvEnd()};
+// a frame counter for the FPS readout; also the moment the camera settles
+let fpsOn=false,fe=null,frames=0;
 function fpsToggle(){
  if(U.fps&&!fpsOn){fpsOn=true;fe=fe||Object.assign(document.createElement('div'),{id:'fps'});B.appendChild(fe);let n=0,t0=performance.now();
-  (function f(t){if(!fpsOn)return;n++;if(t-t0>=500){fe.textContent=Math.round(n*1000/(t-t0))+' FPS';n=0;t0=t}requestAnimationFrame(f)})(t0)}
+  (function f(t){if(!fpsOn)return;n++;frames++;if(t-t0>=500){fe.textContent=Math.round(n*1000/(t-t0))+' FPS';n=0;t0=t}requestAnimationFrame(f)})(t0)}
  else if(!U.fps&&fpsOn){fpsOn=false;if(fe)fe.remove()}}
 
 /* ---- on-screen timer: the same clock as the final stats (starts at the first click, pauses excluded).
    It is not positioned by coordinates: it is MOVED INTO the HUD panel chosen in the Interface panel
-   (#score / #task / #menu), so a long task name, a big flag or a big font can never overlap it. ---- */
-const tm=Object.assign(document.createElement('div'),{id:'tmr'});
+   (#score / #task / #menu), so a long task name, a big flag or a big font can never overlap it.
+   The readout is written into two existing spans, never rebuilt: innerHTML on a 20/s timer would
+   force a style/layout pass over the whole page, SVG included, on every tick. ---- */
+const tm=document.createElement('div');tm.id='tmr';
+const tmM=tm.appendChild(document.createElement('span')),tmF=tm.appendChild(document.createElement('span'));
+tmM.className='h';tmF.className='f';
 B.appendChild(tm);
 function tmHost(){const id=U.tmPos==='task'?['task','score']:U.tmPos==='menu'?['menu','score']:['score','task'];
  for(const h of id){const el=$(h);if(el)return el}return null}
-function tmPlace(){const h=tmHost();if(h&&tm.parentNode!==h){if(h.id==='task')h.appendChild(tm);else h.insertBefore(tm,h.querySelector('button')||null)}}
+function tmPlace(){const h=tmHost();if(!h||tm.parentNode===h)return;
+ // #score is a column: the timer is a ROW UNDER the score. Elsewhere it is appended after the content.
+ if(h.id==='score')h.appendChild(tm);else{h.appendChild(tm)}}
 tmPlace();
-setInterval(()=>{if(!U.showTimer)return;if(!G){tm.textContent='';return}
- let v=G.t0===undefined?(G.fin?G.t:gt()):G.t0===null?0:(G.fin?G.t:gt())-G.t0;v=Math.max(0,v);
+let tmTxt='',tmTxtF='';
+setInterval(()=>{if(!U.showTimer)return;
+ let v;
+ if(!G)v=0;                                        // before the first game / before the first click: 0:00
+ else{v=G.t0===undefined?(G.fin?G.t:gt()):G.t0===null?0:(G.fin?G.t:gt())-G.t0;v=Math.max(0,v)}
  const s=Math.floor(v/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
- // hundredths are shown by default; with the "Tenths" switch on, only one decimal
- const frac=String(Math.floor(v%1000/(U.tmTenths?100:10))).padStart(U.tmTenths?1:2,'0');
- tm.innerHTML='<span class="h">'+(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(ss).padStart(2,'0')+'</span><span class="f">.'+frac+'</span>'},50);
+ const a=(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(ss).padStart(2,'0');
+ // digits after the dot = the slider value (0 = plain time, no dot at all)
+ const n=U.tmDigits||0,b=String(Math.floor(v%1000/Math.pow(10,3-n))||0).padStart(n,'0');
+ const f=n?'.'+b:'';
+ if(a!==tmTxt){tmTxt=a;tmM.textContent=a}
+ if(f!==tmTxtF){tmTxtF=f;tmF.textContent=f}
+ // nothing to show before the first country is found: keep the space, but dim it out
+ B.classList.toggle('tm-idle',!G)},100);
 /* ---- apply settings ---- */
 const ucss=document.head.appendChild(Object.assign(document.createElement('style'),{id:'ucss'}));
 function apply(){
  const st=root.style;for(const k in VAR)st.setProperty(VAR[k],U[k]);
+ // pre-blended colours derived from the theme (see mix() above)
+ st.setProperty('--land-off',mix(U.land,U.sea,.5));
+ st.setProperty('--skip',mix(U.bad,U.land,.4));
+ st.setProperty('--skip-dot',mix(U.bad,U.mute,.6));
+ st.setProperty('--sea-94',mix(U.sea,U.sea,0)+'f0');
  st.setProperty('--font',FONTS[U.font]||FONTS.mono);
  [['--ui',U.ui],['--tn',U.tn+'px'],['--tf',U.tf+'px'],['--r',U.r+'px'],['--bw',U.bw+'px'],['--hudop',U.hudop],['--cw',U.cw]].forEach(([k,v])=>st.setProperty(k,v));
  const T=(c,on)=>B.classList.toggle(c,!!on);
  T('hide-score',U.hideScore);T('hide-prog',U.hideProg);T('hide-att',U.hideAtt);T('hide-zoom',U.hideZoom);T('hide-menu',U.hideMenu);T('hide-restart',U.hideRestart);
- T('task-bottom',U.taskPos==='bottom');T('zoom-right',U.zoomPos==='right');T('nodots',!U.showDots);T('still',U.still);T('fastpan',U.fastpan);
+ T('task-bottom',U.taskPos==='bottom');T('zoom-right',U.zoomPos==='right');T('nodots',!U.showDots);T('still',U.still);T('fastpan',U.fastpan);T('simplify',U.autoSimplify!==false);
  DRAGT=U.drag;st.setProperty('--tms',U.tmSize+'px');tmPlace();T('tm-hide',!U.showTimer);T('shape-crisp',U.shape==='crisp');T('shape-speed',U.shape==='speed');
  ucss.textContent=U.css||'';fpsToggle();window.draw()}
 
@@ -1025,9 +1090,9 @@ function apply(){
 const SC=[['Theme|Тема',[['c','sea','Background|Фон'],['c','land','Land|Суша'],['c','landHi','Land hover|Суша при наведении'],['c','line','Borders|Границы'],['c','accent','Accent|Акцент'],['c','ok','Correct|Верно'],['c','bad','Wrong|Ошибка'],['c','panel','Panels|Панели'],['c','edge','Panel border|Рамки'],['c','ink','Text|Текст'],['c','mute','Muted text|Второстепенный текст']]],
  ['Type & shape|Шрифт и форма',[['s','font','Font|Шрифт',{mono:'Mono',sans:'Sans',cond:'Condensed',serif:'Serif'}],['r','ui','UI scale|Масштаб интерфейса',.7,1.6,.05],['r','tn','Task name size|Размер названия',12,56,1],['r','tf','Task flag size|Размер флага',14,72,1],['r','r','Corner radius|Скругление',0,20,1],['r','bw','Border width|Толщина рамок',0,4,1]]],
  ['Map|Карта',[['r','cw','Country borders|Границы стран',0,2.5,.1],['r','dot','Micro-state dots|Точки микрогосударств',.4,3,.1],['k','showDots','Show dots|Показывать точки'],['r','drag','Click tolerance (px)|Допуск клика (px)',2,24,1],['s','shape','Rendering|Отрисовка',{auto:'Auto',crisp:'Crisp edges',speed:'Speed'}]]],
- ['Timer|Таймер',[['k','showTimer','Show timer|Показывать таймер'],['s','tmPos','Position|Позиция',{score:'Under score',task:'Under task',menu:'Under menu'}],['r','tmSize','Size|Размер',10,56,1],['k','tmTenths','Tenths|Десятые доли'],['k','tmHundredths','Hundredths|Сотые доли']]],
+ ['Timer|Таймер',[['k','showTimer','Show timer|Показывать таймер'],['s','tmPos','Position|Позиция',{score:'Under score',task:'Under task',menu:'Under menu'}],['r','tmSize','Size|Размер',10,56,1],['r','tmDigits','Digits after dot|Цифр после точки',0,3,1]]],
  ['HUD|Интерфейс',[['r','hudop','HUD opacity|Прозрачность HUD',.2,1,.05],['s','taskPos','Task position|Позиция задания',{top:'Top',bottom:'Bottom'}],['s','zoomPos','Zoom buttons|Кнопки зума',{left:'Left',right:'Right'}],['k','hideScore','Hide score|Скрыть счёт'],['k','hideProg','Hide progress|Скрыть прогресс'],['k','hideAtt','Hide attempts|Скрыть попытки'],['k','hideZoom','Hide zoom buttons|Скрыть кнопки зума'],['k','hideMenu','Hide menu button|Скрыть кнопку меню'],['k','hideRestart','Hide restart button|Скрыть кнопку перезапуска']]],
- ['Performance|Производительность',[['k','fastpan','Hide borders while moving|Скрывать границы при движении'],['k','still','Reduce motion|Меньше анимаций'],['k','fps','FPS counter|Счётчик FPS']]],
+ ['Performance|Производительность',[['k','autoSimplify','Simplify the camera while moving|Упрощать вид при движении'],['k','fastpan','Hide borders while moving|Скрывать границы при движении'],['k','still','Reduce motion|Меньше анимаций'],['k','fps','FPS counter|Счётчик FPS']]],
  ['Custom CSS|Свой CSS',[['t']]]];
 const L=s=>{const p=s.split('|');return S.lang==='ru'&&p[1]?p[1]:p[0]};
 const set=(k,v)=>{U[k]=v;save();apply()};

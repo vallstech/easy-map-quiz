@@ -11,45 +11,93 @@ const PRESETS={cyber:CYBER,
  amber:{...CYBER,sea:'#0b0800',land:'#1d1600',landHi:'#3a2c00',line:'#0b0800',accent:'#ffb000',ok:'#7dff5a',bad:'#ff4d2e',panel:'#100c00',edge:'#2a2000',ink:'#ffd27a',mute:'#8a6a1f'},
  light:{...CYBER,sea:'#eef1f4',land:'#cdd5de',landHi:'#b3bfcc',line:'#eef1f4',accent:'#0057ff',ok:'#12a05c',bad:'#d92c3f',panel:'#ffffff',edge:'#cfd6de',ink:'#0d1117',mute:'#69758a'}};
 const DEF={...CYBER,ui:1,tn:22,tf:30,hudop:1,cw:.6,dot:1,showDots:true,shape:'auto',fastpan:false,still:false,fps:false,
- drag:8,showTimer:true,tmSize:20,tmTenths:false,tmHundredths:true,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:''};
-let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
+ drag:8,showTimer:true,tmSize:20,tmDigits:0,tmPos:'score',hideScore:false,hideProg:false,hideAtt:false,hideZoom:false,hideMenu:false,hideRestart:false,taskPos:'top',zoomPos:'left',css:'',autoSimplify:true};
+const KEY_OLD=KEY;
+let U={...DEF};try{Object.assign(U,JSON.parse(localStorage.getItem(KEY_OLD)||'{}'))}catch(e){}
+/* migrate the old "Tenths"/"Hundredths" checkboxes -> digits after the dot (0 by default) */
+if(typeof U.tmDigits!=='number')U.tmDigits=U.tmHundredths?2:U.tmTenths?1:0;
+delete U.tmTenths;delete U.tmHundredths;
+U.tmDigits=Math.min(3,Math.max(0,Math.round(U.tmDigits)||0));
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(U))}catch(e){}};
 
 /* ---- performance: micro-state dot radius is ONE css variable per frame (engine wrote r on every dot every frame) ---- */
 const gw=$('w'),gd=$('dots');
-window.draw=function(){gw.setAttribute('transform','translate('+cur.x+' '+cur.y+') scale('+cur.k+')');gd.style.setProperty('--dr',(5*U.dot/cur.k)+'px')};
-let mvT=0;const mv=()=>{if(!U.fastpan)return;B.classList.add('mv');clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),180)};
-$('map').addEventListener('wheel',mv,{passive:true});$('map').addEventListener('mousemove',e=>{if(e.buttons)mv()});
-let fpsOn=false,fe=null;
+/* Border width. The stylesheet used vector-effect:non-scaling-stroke, which forces the browser to
+   re-derive the stroke of every segment on EVERY scale change — 91 763 segments on the 50m map,
+   which is why zooming crawled. Instead the width is divided by the scale here once per frame:
+   one attribute write, and the renderer just scales an already-built shape. */
+window.draw=function(){
+ gw.setAttribute('transform','translate('+cur.x+' '+cur.y+') scale('+cur.k+')');
+ gw.style.setProperty('--cwf',(U.cw/cur.k)+'px');
+ gd.style.setProperty('--dr',(5*U.dot/cur.k)+'px')};
+
+/* ---- pre-blended colours: the stylesheet used to call color-mix() for every country element,
+   which meant re-computing the colour of hundreds of paths on every style pass. Mixing two hex
+   colours in JS once per setting change is free by comparison. ---- */
+const hex=s=>{s=String(s).trim();if(s[0]==='#')s=s.slice(1);if(s.length===3)s=s[0]+s[0]+s[1]+s[1]+s[2]+s[2];return[parseInt(s.slice(0,2),16)||0,parseInt(s.slice(2,4),16)||0,parseInt(s.slice(4,6),16)||0]};
+const mix=(a,b,t)=>{const A=hex(a),B2=hex(b);return'#'+A.map((v,i)=>Math.round(v+(B2[i]-v)*t).toString(16).padStart(2,'0')).join('')};
+
+/* "Simplify the camera while moving": one flag on <body> while the view is being moved. */
+let mvT=0;
+const mvEnd=()=>{clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),140)};
+const mv=()=>{if(!U.fastpan&&!U.autoSimplify)return;B.classList.add('mv');mvEnd()};
+$('map').addEventListener('wheel',mv,{passive:true});
+$('map').addEventListener('mousemove',e=>{if(e.buttons)mv()});
+// the +/− buttons and "Reset view"/"Zoom to region" glide too: flag those as well
+['zi','zo','zr','zg'].forEach(id=>$(id).addEventListener('click',mv));
+let mvT=0;
+const mvEnd=()=>{clearTimeout(mvT);mvT=setTimeout(()=>B.classList.remove('mv'),140)};
+const mv=()=>{if(!U.fastpan&&!U.autoSimplify)return;B.classList.add('mv');mvEnd()};
+// a frame counter for the FPS readout; also the moment the camera settles
+let fpsOn=false,fe=null,frames=0;
 function fpsToggle(){
  if(U.fps&&!fpsOn){fpsOn=true;fe=fe||Object.assign(document.createElement('div'),{id:'fps'});B.appendChild(fe);let n=0,t0=performance.now();
-  (function f(t){if(!fpsOn)return;n++;if(t-t0>=500){fe.textContent=Math.round(n*1000/(t-t0))+' FPS';n=0;t0=t}requestAnimationFrame(f)})(t0)}
+  (function f(t){if(!fpsOn)return;n++;frames++;if(t-t0>=500){fe.textContent=Math.round(n*1000/(t-t0))+' FPS';n=0;t0=t}requestAnimationFrame(f)})(t0)}
  else if(!U.fps&&fpsOn){fpsOn=false;if(fe)fe.remove()}}
 
 /* ---- on-screen timer: the same clock as the final stats (starts at the first click, pauses excluded).
    It is not positioned by coordinates: it is MOVED INTO the HUD panel chosen in the Interface panel
-   (#score / #task / #menu), so a long task name, a big flag or a big font can never overlap it. ---- */
-const tm=Object.assign(document.createElement('div'),{id:'tmr'});
+   (#score / #task / #menu), so a long task name, a big flag or a big font can never overlap it.
+   The readout is written into two existing spans, never rebuilt: innerHTML on a 20/s timer would
+   force a style/layout pass over the whole page, SVG included, on every tick. ---- */
+const tm=document.createElement('div');tm.id='tmr';
+const tmM=tm.appendChild(document.createElement('span')),tmF=tm.appendChild(document.createElement('span'));
+tmM.className='h';tmF.className='f';
 B.appendChild(tm);
 function tmHost(){const id=U.tmPos==='task'?['task','score']:U.tmPos==='menu'?['menu','score']:['score','task'];
  for(const h of id){const el=$(h);if(el)return el}return null}
-function tmPlace(){const h=tmHost();if(h&&tm.parentNode!==h){if(h.id==='task')h.appendChild(tm);else h.insertBefore(tm,h.querySelector('button')||null)}}
+function tmPlace(){const h=tmHost();if(!h||tm.parentNode===h)return;
+ // #score is a column: the timer is a ROW UNDER the score. Elsewhere it is appended after the content.
+ if(h.id==='score')h.appendChild(tm);else{h.appendChild(tm)}}
 tmPlace();
-setInterval(()=>{if(!U.showTimer)return;if(!G){tm.textContent='';return}
- let v=G.t0===undefined?(G.fin?G.t:gt()):G.t0===null?0:(G.fin?G.t:gt())-G.t0;v=Math.max(0,v);
+let tmTxt='',tmTxtF='';
+setInterval(()=>{if(!U.showTimer)return;
+ let v;
+ if(!G)v=0;                                        // before the first game / before the first click: 0:00
+ else{v=G.t0===undefined?(G.fin?G.t:gt()):G.t0===null?0:(G.fin?G.t:gt())-G.t0;v=Math.max(0,v)}
  const s=Math.floor(v/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
- // hundredths are shown by default; with the "Tenths" switch on, only one decimal
- const frac=String(Math.floor(v%1000/(U.tmTenths?100:10))).padStart(U.tmTenths?1:2,'0');
- tm.innerHTML='<span class="h">'+(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(ss).padStart(2,'0')+'</span><span class="f">.'+frac+'</span>'},50);
+ const a=(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(ss).padStart(2,'0');
+ // digits after the dot = the slider value (0 = plain time, no dot at all)
+ const n=U.tmDigits||0,b=String(Math.floor(v%1000/Math.pow(10,3-n))||0).padStart(n,'0');
+ const f=n?'.'+b:'';
+ if(a!==tmTxt){tmTxt=a;tmM.textContent=a}
+ if(f!==tmTxtF){tmTxtF=f;tmF.textContent=f}
+ // nothing to show before the first country is found: keep the space, but dim it out
+ B.classList.toggle('tm-idle',!G)},100);
 /* ---- apply settings ---- */
 const ucss=document.head.appendChild(Object.assign(document.createElement('style'),{id:'ucss'}));
 function apply(){
  const st=root.style;for(const k in VAR)st.setProperty(VAR[k],U[k]);
+ // pre-blended colours derived from the theme (see mix() above)
+ st.setProperty('--land-off',mix(U.land,U.sea,.5));
+ st.setProperty('--skip',mix(U.bad,U.land,.4));
+ st.setProperty('--skip-dot',mix(U.bad,U.mute,.6));
+ st.setProperty('--sea-94',mix(U.sea,U.sea,0)+'f0');
  st.setProperty('--font',FONTS[U.font]||FONTS.mono);
  [['--ui',U.ui],['--tn',U.tn+'px'],['--tf',U.tf+'px'],['--r',U.r+'px'],['--bw',U.bw+'px'],['--hudop',U.hudop],['--cw',U.cw]].forEach(([k,v])=>st.setProperty(k,v));
  const T=(c,on)=>B.classList.toggle(c,!!on);
  T('hide-score',U.hideScore);T('hide-prog',U.hideProg);T('hide-att',U.hideAtt);T('hide-zoom',U.hideZoom);T('hide-menu',U.hideMenu);T('hide-restart',U.hideRestart);
- T('task-bottom',U.taskPos==='bottom');T('zoom-right',U.zoomPos==='right');T('nodots',!U.showDots);T('still',U.still);T('fastpan',U.fastpan);
+ T('task-bottom',U.taskPos==='bottom');T('zoom-right',U.zoomPos==='right');T('nodots',!U.showDots);T('still',U.still);T('fastpan',U.fastpan);T('simplify',U.autoSimplify!==false);
  DRAGT=U.drag;st.setProperty('--tms',U.tmSize+'px');tmPlace();T('tm-hide',!U.showTimer);T('shape-crisp',U.shape==='crisp');T('shape-speed',U.shape==='speed');
  ucss.textContent=U.css||'';fpsToggle();window.draw()}
 
@@ -57,9 +105,9 @@ function apply(){
 const SC=[['Theme|Тема',[['c','sea','Background|Фон'],['c','land','Land|Суша'],['c','landHi','Land hover|Суша при наведении'],['c','line','Borders|Границы'],['c','accent','Accent|Акцент'],['c','ok','Correct|Верно'],['c','bad','Wrong|Ошибка'],['c','panel','Panels|Панели'],['c','edge','Panel border|Рамки'],['c','ink','Text|Текст'],['c','mute','Muted text|Второстепенный текст']]],
  ['Type & shape|Шрифт и форма',[['s','font','Font|Шрифт',{mono:'Mono',sans:'Sans',cond:'Condensed',serif:'Serif'}],['r','ui','UI scale|Масштаб интерфейса',.7,1.6,.05],['r','tn','Task name size|Размер названия',12,56,1],['r','tf','Task flag size|Размер флага',14,72,1],['r','r','Corner radius|Скругление',0,20,1],['r','bw','Border width|Толщина рамок',0,4,1]]],
  ['Map|Карта',[['r','cw','Country borders|Границы стран',0,2.5,.1],['r','dot','Micro-state dots|Точки микрогосударств',.4,3,.1],['k','showDots','Show dots|Показывать точки'],['r','drag','Click tolerance (px)|Допуск клика (px)',2,24,1],['s','shape','Rendering|Отрисовка',{auto:'Auto',crisp:'Crisp edges',speed:'Speed'}]]],
- ['Timer|Таймер',[['k','showTimer','Show timer|Показывать таймер'],['s','tmPos','Position|Позиция',{score:'Under score',task:'Under task',menu:'Under menu'}],['r','tmSize','Size|Размер',10,56,1],['k','tmTenths','Tenths|Десятые доли'],['k','tmHundredths','Hundredths|Сотые доли']]],
+ ['Timer|Таймер',[['k','showTimer','Show timer|Показывать таймер'],['s','tmPos','Position|Позиция',{score:'Under score',task:'Under task',menu:'Under menu'}],['r','tmSize','Size|Размер',10,56,1],['r','tmDigits','Digits after dot|Цифр после точки',0,3,1]]],
  ['HUD|Интерфейс',[['r','hudop','HUD opacity|Прозрачность HUD',.2,1,.05],['s','taskPos','Task position|Позиция задания',{top:'Top',bottom:'Bottom'}],['s','zoomPos','Zoom buttons|Кнопки зума',{left:'Left',right:'Right'}],['k','hideScore','Hide score|Скрыть счёт'],['k','hideProg','Hide progress|Скрыть прогресс'],['k','hideAtt','Hide attempts|Скрыть попытки'],['k','hideZoom','Hide zoom buttons|Скрыть кнопки зума'],['k','hideMenu','Hide menu button|Скрыть кнопку меню'],['k','hideRestart','Hide restart button|Скрыть кнопку перезапуска']]],
- ['Performance|Производительность',[['k','fastpan','Hide borders while moving|Скрывать границы при движении'],['k','still','Reduce motion|Меньше анимаций'],['k','fps','FPS counter|Счётчик FPS']]],
+ ['Performance|Производительность',[['k','autoSimplify','Simplify the camera while moving|Упрощать вид при движении'],['k','fastpan','Hide borders while moving|Скрывать границы при движении'],['k','still','Reduce motion|Меньше анимаций'],['k','fps','FPS counter|Счётчик FPS']]],
  ['Custom CSS|Свой CSS',[['t']]]];
 const L=s=>{const p=s.split('|');return S.lang==='ru'&&p[1]?p[1]:p[0]};
 const set=(k,v)=>{U[k]=v;save();apply()};

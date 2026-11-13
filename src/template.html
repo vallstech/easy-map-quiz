@@ -17,11 +17,11 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--sea);color:var(--ink);font:15px/1.4 system-ui,"Segoe UI",sans-serif;overflow:hidden}
 #map{position:absolute;inset:0;cursor:grab}#map.drag,#map.drag *{cursor:grabbing!important}
 .c[data-s=on],.hit:not([data-s=off]){cursor:pointer}svg{width:100%;height:100%;display:block}
-.c{fill:var(--land);transition:fill .3s;stroke:var(--line);stroke-width:.7;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.c{fill:var(--land);transition:fill .3s;stroke:var(--line);stroke-width:.7;stroke-linejoin:round}
 .c[data-s=off]{fill:#1c2835}.c[data-s=on]:hover{fill:var(--land-hi)}.c[data-s=ok]{fill:var(--ok)}.c[data-s=skip]{fill:#7a4b4b}
 .c.bad,.c.hint{fill:var(--bad)!important}.c.hint{animation:p .7s infinite alternate}.c.okf{fill:var(--ok)!important}.c.okf,.c.skf,.dot.okf,.dot.skf{transition:none}.c.fo,.dot.fo{transition:fill 1s}.c.skf{fill:#a06666!important}
 @keyframes p{to{opacity:.55}}
-.dot{transition:fill .3s;fill:#9fb4c8;stroke:var(--sea);stroke-width:1;vector-effect:non-scaling-stroke;pointer-events:none}
+.dot{transition:fill .3s;fill:#9fb4c8;stroke:var(--sea);stroke-width:1;pointer-events:none}
 .dot[data-s=off]{fill:#33465a}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:#a06666}.dot.bad,.dot.hint{fill:var(--bad)}.dot.okf{fill:var(--ok)}.dot.skf{fill:#a06666}
 .hit{fill:transparent;cursor:pointer}.hit[data-s=off]{pointer-events:none}
 .bar{position:absolute;z-index:5;display:flex;gap:8px;align-items:center}

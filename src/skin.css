@@ -2,6 +2,10 @@
    Everything is driven by CSS variables that the Interface panel (panel.js, button "UI" or F2) sets. */
 :root{--sea:#06080b;--land:#161c24;--land-hi:#27323f;--line:#06080b;--ok:#19e68c;--bad:#ff3b4e;--gold:#00e0ff;--ink:#e6edf3;--mute:#6b7a8a;--panel:#0b0f14;--edge:#1d2631;
  --font:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;--r:0px;--bw:1px;--ui:1;--tn:22px;--tf:30px;--hudop:1;--cw:.6}
+/* Pre-blended colours. These used to be color-mix(in srgb, …) per element: on a 200-country map
+   that means hundreds of colour computations to redo whenever the variable changes. The panel
+   recomputes them with plain JS (mix() in ui/panel.js) and writes them here instead. */
+:root{--land-off:#10161d;--skip:#3f3438;--skip-dot:#7b5a5a;--sea-94:#06080bf0}
 html,body{background:var(--sea);color:var(--ink);font:13px/1.35 var(--font);letter-spacing:.02em}
 button,input,select,textarea{font-family:var(--font)}
 *{box-shadow:none!important}                      /* perf: no shadows anywhere */
@@ -15,24 +19,37 @@ button:disabled{opacity:.35}
 input{accent-color:var(--gold)}
 .mute,#score small{color:var(--mute)}
 
-/* ---- map ---- */
-#map{contain:layout paint}
-#w{will-change:transform}
-.c{fill:var(--land);stroke:var(--line);stroke-width:var(--cw);transition:none}   /* perf: no per-path transitions */
-.c[data-s=off]{fill:color-mix(in srgb,var(--land) 50%,var(--sea))}
+/* ---- map ----
+   Performance notes (the map is thousands of <path> nodes; every extra paint pass shows):
+   NO will-change:transform on #w — it would promote the whole map to one composited layer that
+   has to be RE-RASTERISED on every scale change, which is exactly what made zooming crawl.
+   Left as a plain SVG transform the browser can keep the existing rasterisation. */
+#map{contain:strict}
+.c{fill:var(--land);stroke:var(--line);stroke-width:var(--cwf,var(--cw));transition:none;stroke-linejoin:round}   /* perf: no per-path transitions; stroke width is pre-divided by the camera scale in draw() */
+.c[data-s=off]{fill:var(--land-off)}
 .c[data-s=on]:hover{fill:var(--land-hi)}
 .c[data-s=ok]{fill:var(--ok)}
-.c[data-s=skip]{fill:color-mix(in srgb,var(--bad) 40%,var(--land))}
+.c[data-s=skip]{fill:var(--skip)}
 .c.fo,.dot.fo{transition:fill 1s}                 /* the green fade-out of Hard mode stays */
 .c.okf{fill:var(--ok)!important}.c.bad,.c.hint{fill:var(--bad)!important}
-.dot{r:var(--dr,5px);transition:none;fill:var(--mute);stroke:var(--sea)}   /* radius = ONE css variable written per frame instead of N attributes */
+.dot{r:var(--dr,5px);transition:none;fill:var(--mute);stroke:var(--sea);stroke-width:calc(var(--cwf,0.6px)*2)}   /* radius = ONE css variable written per frame instead of N attributes */
 .hit{r:calc(var(--dr,5px)*2.4)}
-.dot[data-s=off]{fill:var(--edge)}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:color-mix(in srgb,var(--bad) 60%,var(--mute))}
+.dot[data-s=off]{fill:var(--edge)}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:var(--skip-dot)}
 .dot.okf{fill:var(--ok)}.dot.bad,.dot.hint{fill:var(--bad)}
 .shape-crisp .c{shape-rendering:crispEdges}.shape-speed .c{shape-rendering:optimizeSpeed}
-.fastpan.mv .c{stroke:none}                       /* optional: borders off while moving (big FPS gain on the 50m map) */
+/* While the camera is moving the SVG is re-rasterised every frame; dropping the strokes (and,
+   with the slower maps, the thin borders entirely) is what keeps the zoom smooth. */
+.fastpan.mv .c{stroke:none}
+/* "Simplify the camera while moving" (on by default): no borders, no land fills redraw and no
+   hover/transition work during a wheel/drag, then one clean repaint when it stops. */
+.simplify.mv .c{stroke:none;transition:none}
+.simplify.mv .dot{stroke:none}
+.simplify.mv .c[data-s=on]:hover{fill:var(--land)}
 .nodots .dot{display:none}
 .still .c.hint,.still #pop.neg{animation:none}
+/* while the camera glides, the browser repaints at priority: JS-driven text updates (the timer)
+   must not compete with it */
+.mv #tmr{visibility:hidden}
 
 /* ---- HUD ---- */
 #top,#zoom,#att,.dock{zoom:var(--ui)}
@@ -40,14 +57,13 @@ input{accent-color:var(--gold)}
 #task{background:transparent;border:none;border-left:3px solid var(--gold);padding:4px 14px;min-width:0;justify-content:flex-start;flex-wrap:wrap;row-gap:2px}
 #task .nm{font:700 var(--tn)/1 var(--font);text-transform:uppercase;letter-spacing:.08em}
 .fl{height:var(--tf);border-radius:0}.fe{font-size:var(--tf)}
-#score{background:transparent;border:none;padding:0 4px;text-align:right}
+#score{background:transparent;border:none;padding:0 4px;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 #score b{font:700 24px/1.1 var(--font);color:var(--gold);font-variant-numeric:tabular-nums}
 #score small{font-size:10px;text-transform:uppercase;letter-spacing:.14em}
-#score #tmr{margin-top:2px}
 #menu{gap:8px;padding:5px 8px}
 #menu #tmr,#task #tmr{margin-left:12px}
+#task #tmr{align-self:center}
 .task-bottom #menu{position:fixed;left:12px;bottom:14px}
-#score #tmr{margin-top:2px}
 #att{background:transparent;border:none;padding:0}.pip{border-radius:0;width:20px;height:4px}.pip.x{background:var(--edge)}
 #att .mute{display:none}
 #zoom{gap:4px}#zoom button{padding:6px 10px}
@@ -56,7 +72,7 @@ input{accent-color:var(--gold)}
 #pop.neg{border-radius:var(--r);border-width:2px;text-transform:uppercase;letter-spacing:.04em}
 
 /* ---- start / pause / end screens ---- */
-.scr{background:color-mix(in srgb,var(--sea) 94%,transparent)}
+.scr{background:var(--sea-94)}
 .box h1{font:700 16px var(--font);letter-spacing:.22em;text-transform:uppercase}
 #tSub{display:none}
 .sec{margin-top:12px;padding-top:8px;border-top:var(--bw) solid var(--edge)}
@@ -90,13 +106,14 @@ body.camlock #map{cursor:default}.camlock #zoom button{opacity:.35}   /* camera 
 #fps{position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:70;font:11px var(--font);color:var(--ok);pointer-events:none}
 
 /* ---- on-screen timer ----
-   Lives INSIDE the HUD panel it belongs to (created by ui/panel.js), so it can never
-   overlap the task name/flag however big those are: the panels are flex items of the
-   top bar / the zoom column and the timer is one more row inside them. ---- */
+   It lives INSIDE the HUD panel chosen as its position, as a row UNDER that panel's own content
+   (#score is a column, so the timer stacks under the score) — never at fixed coordinates, so a
+   big task name, a big flag or a big UI scale cannot overlap it.
+   Only two spans are ever touched; the text is rewritten only when a digit actually changes,
+   because a full innerHTML rebuild 10–20 times a second forces a style/layout pass over the
+   whole page (thousands of SVG nodes) on every tick. ---- */
 #tmr{font:700 var(--tms,20px)/1.15 var(--font);font-variant-numeric:tabular-nums;color:var(--ink);pointer-events:none;white-space:nowrap}
-/* the seconds part keeps a fixed width, so the running hundredths do not make it jump */
+/* the whole-number part keeps a fixed width, so a growing timer does not shift the layout */
 #tmr .h{display:inline-block;min-width:3.2ch;text-align:right}
-#tmr .f{opacity:.75}
-/* Position = which panel hosts the timer: Under score (default), Under task, Under menu.
-   The timer is moved between the hosts by ui/panel.js. */
+#tmr .f{opacity:.8}
 .tm-hide #tmr{display:none}

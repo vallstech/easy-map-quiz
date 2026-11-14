@@ -10,6 +10,8 @@
 const MAPS = /*__DATA__*/{};   // {"110":[countries],"50":[countries]} — one entry per data/geojson/<key>.geojson
 const FLAGS = /*__FLAGS__*/{}; // optional SVG data-URIs by ISO2; otherwise the flag emoji / font is used
 const S_ = 4;                  // world units per degree (must match build.py)
+const W_W = 360 + 12;         // world width in degrees: the Pacific is wrapped 12° past 180 so
+                               // Samoa/Tonga/Kiribati (shifted east by build.py) are inside the view
 
 /* Live map state (filled by core/map.js). Declared here because config-time
    expressions below (nm, inReg) close over them. */
@@ -19,10 +21,14 @@ const REGS = ['Europe', 'Asia', 'Africa', 'North America', 'South America', 'Oce
 
 // Hand-picked "zoom to region" boxes [lon0,lat0,lon1,lat1] — bounding boxes of countries with
 // far-flung territories (Russia, USA, France) would be useless.
+// The map is Pacific-centred: the far-west Pacific islands (Samoa, Tonga, Kiribati) are stored
+// shifted east by a full turn, so the world spans -180…W_EAST and Oceania stays on the right.
+const W_EAST = 205;   // must match SHIFT_EAST / the geometry produced by build.py: the widest
+                      // shifted country is Kiribati on the 50m file, whose scattered islands reach ~203°
 const VIEWS = {
   Europe: [-25, 34, 45, 72], Asia: [25, -11, 150, 55], Africa: [-20, -36, 52, 38],
   'North America': [-170, 5, -50, 75], 'South America': [-85, -57, -32, 14],
-  Oceania: [110, -48, 180, 2], World: [-180, -60, 180, 85]
+  Oceania: [110, -50, W_EAST, 12], World: [-180, -60, W_EAST, 85]
 };
 
 /* UI strings. Every key is looked up as t(key); `sub:<name>` keys rename UN sub-regions. */

@@ -13,7 +13,10 @@ const box = () => $('map').getBoundingClientRect();
 
 function fitWorld() {
   const b = box();
-  K0 = Math.min(b.width / (360 * S_), b.height / (150 * S_));
+  const w = (VIEWS.World[2] - VIEWS.World[0]) * S_, h = (VIEWS.World[3] - VIEWS.World[1]) * S_;
+  // K0 = the scale at which the whole world window fits the viewport; it is the zoom-out
+  // limit (K0 * .9). "Reset view" then shows exactly the Whole World box (Pacific-centred).
+  K0 = Math.min(b.width / w, b.height / h);
   return viewOf(VIEWS.World);
 }
 

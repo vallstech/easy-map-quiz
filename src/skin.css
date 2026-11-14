@@ -33,7 +33,7 @@ input{accent-color:var(--gold)}
 .c.fo,.dot.fo{transition:fill 1s}                 /* the green fade-out of Hard mode stays */
 .c.okf{fill:var(--ok)!important}.c.bad,.c.hint{fill:var(--bad)!important}
 .dot{r:var(--dr,5px);transition:none;fill:var(--mute);stroke:var(--sea);stroke-width:calc(var(--cwf,0.6px)*2)}   /* radius = ONE css variable written per frame instead of N attributes */
-.hit{r:calc(var(--dr,5px)*2.4)}
+.hit{r:calc(var(--dr,5px)*3.6)}   /* generous: micro-states are 1–2 px wide on purpose */
 .dot[data-s=off]{fill:var(--edge)}.dot[data-s=ok]{fill:var(--ok)}.dot[data-s=skip]{fill:var(--skip-dot)}
 .dot.okf{fill:var(--ok)}.dot.bad,.dot.hint{fill:var(--bad)}
 .shape-crisp .c{shape-rendering:crispEdges}.shape-speed .c{shape-rendering:optimizeSpeed}

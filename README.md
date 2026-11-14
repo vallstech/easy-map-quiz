@@ -66,6 +66,7 @@ Alternatively (instead of the font), put SVGs named by lower-case ISO2 code (`fr
 
 ## Where to change things
 - Regions, view boxes for "Zoom to region": `VIEWS` in `src/js/core/config.js`
+- Map projection window / which countries get shifted across the date line: `SHIFT_EAST` in `build.py` and `W_EAST` in `src/js/core/config.js` (keep them in sync)
 - Scoring: constants `BASE, PEN, BONUS, BTIME` (100 base, −25 per wrong try, up to +50 speed bonus fading over 10 s; skipped country = 0) — same file
 - UI strings EN/RU: object `T` in the same file. Country names come from the browser's `Intl.DisplayNames` (offline), fallback — name from GeoJSON.
 - Camera feel: `smoothF()` in `src/js/core/camera.js`
@@ -74,7 +75,8 @@ Alternatively (instead of the font), put SVGs named by lower-case ISO2 code (`fr
 
 ## Decisions made on ambiguous points
 - Regions use Natural Earth's `CONTINENT` (Russia → Europe, Turkey/Cyprus → Asia). Disputed territories are used as in the source; only entities with an ISO2 code and type Sovereign/Country/Disputed are playable.
-- Micro-states: any country whose bounding box is < 6 deg² (or missing geometry) gets an always-visible dot with a ~2.4× larger invisible hit area.
+- Micro-states: any country whose bounding box is < 6 deg² (or missing geometry) gets an always-visible dot with a ~3.6× larger invisible hit area.
+- The map is Pacific-centred: Samoa, Tonga and Kiribati are shifted east by a full turn in `build.py` (`SHIFT_EAST`) so they sit on the right-hand side with the rest of Oceania. The world window in `src/js/core/config.js` (`W_EAST`) must match that shift; the ±12° margin keeps the scattered Kiribati islands of the 50m file inside the frame.
 - Global-attempts mode: when the pool runs out the overlay appears; **Continue** then ends the game.
 - Game time excludes pauses (menu, miss overlay). Dark theme only (no theme switch).
 - Esc opens the pause menu. State is stored in `localStorage` key `mapquiz.v1`.

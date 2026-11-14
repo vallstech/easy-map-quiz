@@ -24,6 +24,16 @@ CONT = {"Europe", "Asia", "Africa", "North America", "South America", "Oceania"}
 TYPES = {"Sovereign country", "Country", "Sovereignty", "Disputed"}  # skips Dependency / Lease / Indeterminate
 # Natural Earth leaves ISO_A2 = -99 for a few countries; patch by ADM0_A3.
 FIX = {"FRA": "FR", "NOR": "NO", "KOS": "XK", "CNM": None, "SOL": None}
+# The map is Pacific-centred. Countries whose geometry sits at the far west edge (Samoa, Tonga)
+# are stored shifted east by a full turn (lon + 360) so they land on the RIGHT side of the map,
+# next to Fiji/Tuvalu/the Marshalls, instead of alone in the empty bottom-left corner.
+# Kiribati is listed here too: its 50m geometry is scattered across the date line, and shifting
+# it keeps its pieces together near the rest of Micronesia.
+SHIFT_EAST = {"WS", "TO", "KI"}
+# ...but a MICRO fallback entry for these already carries a positive longitude, so it must not be
+# shifted a second time (that is how Kiribati once ended up at 533°).
+NO_SHIFT_MICRO = {"KI"}
+
 # Micro-states missing from 110m data are added as marker-only entries: iso2: (name, region, lon, lat)
 MICRO = {
     "VA": ("Vatican City", "Europe", 12.45, 41.9), "SM": ("San Marino", "Europe", 12.46, 43.94),
@@ -107,9 +117,12 @@ def convert(feat):
     if not iso or reg not in CONT or ("TYPE" in P and P["TYPE"] not in TYPES):
         return None
     d, best = [], (-1, None)
+    # Pacific-centred map: geometry of the far-west Pacific islands is moved east by a
+    # full turn so it lands on the right-hand side next to the rest of Oceania.
+    shift = 360.0 if iso in SHIFT_EAST else 0.0
     for poly in polys(feat["geometry"]):
         for ring in poly:
-            pts = [(round((x + 180) * S, 1), round((90 - y) * S, 1)) for x, y in ring]
+            pts = [(round((x + shift + 180) * S, 1), round((90 - y) * S, 1)) for x, y in ring]
             d.append("M" + "L".join(f"{x} {y}" for x, y in pts) + "Z")
         xs, ys = [p[0] for p in poly[0]], [p[1] for p in poly[0]]
         a = (max(xs) - min(xs)) * (max(ys) - min(ys))
@@ -117,11 +130,11 @@ def convert(feat):
             best = (a, poly[0])
     ring = best[1]
     xs, ys = [p[0] for p in ring], [p[1] for p in ring]
-    c = [round(((max(xs) + min(xs)) / 2 + 180) * S, 1), round((90 - (max(ys) + min(ys)) / 2) * S, 1)]
+    c = [round(((max(xs) + min(xs)) / 2 + shift + 180) * S, 1), round((90 - (max(ys) + min(ys)) / 2) * S, 1)]
     return {"id": iso, "n": P.get("NAME") or P.get("NAME_EN") or iso, "r": reg, "d": "".join(d), "c": c,
             "a": round((max(xs) - min(xs)) * (max(ys) - min(ys)), 2),
             "s": P.get("SUBREGION") or None,
-            "b": [round((min(xs) + 180) * S, 1), round((90 - max(ys)) * S, 1), round((max(xs) + 180) * S, 1), round((90 - min(ys)) * S, 1)]}
+            "b": [round((min(xs) + shift + 180) * S, 1), round((90 - max(ys)) * S, 1), round((max(xs) + shift + 180) * S, 1), round((90 - min(ys)) * S, 1)]}
 
 
 def build_map(path):
@@ -134,7 +147,8 @@ def build_map(path):
             out[c["id"]] = c
     for iso, (n, r, lon, lat) in MICRO.items():
         if iso not in out:
-            out[iso] = {"id": iso, "n": n, "r": r, "d": "", "c": [round((lon + 180) * S, 1), round((90 - lat) * S, 1)], "a": 0, "s": SUB.get(iso)}
+            klon = lon + (360.0 if iso in SHIFT_EAST and iso not in NO_SHIFT_MICRO and lon < 0 else 0.0)
+            out[iso] = {"id": iso, "n": n, "r": r, "d": "", "c": [round((klon + 180) * S, 1), round((90 - lat) * S, 1)], "a": 0, "s": SUB.get(iso)}
     return sorted(out.values(), key=lambda c: c["id"])
 
 
